@@ -1,0 +1,11 @@
+webOS Custom Home
+
+Copyright and MIT license notices for the application code are retained in LICENSE.
+
+Native platform components are adapted from punktfunk/client-webos. See
+native/NOTICE and native/vendor/punktfunk for attribution and licenses.
+
+The Inter font is distributed under the SIL Open Font License, included in
+catalog/fonts/Inter-OFL.txt. App artwork belongs to its respective publishers
+and is not covered by the code's MIT license. See docs/ASSETS.json and
+native/artwork/SOURCES.json for sources and modifications.

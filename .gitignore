@@ -1,0 +1,23 @@
+# Local credentials and development caches
+.lgtv-key.json
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Saved TV inventory and downloaded fallback icons
+catalog/apps.js
+catalog/icons/
+catalog/tvs/
+
+# Native build products are also covered by native/.gitignore
+native/assets/
+native/target/
+native/.toolchains/
+native/dist/
+native/state/
+*.log
+.DS_Store

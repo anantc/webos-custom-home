@@ -1,0 +1,25 @@
+Home — native webOS launcher
+
+The window/Skia integration (src/gl.rs), dynamic library loader
+(src/platform/dl.rs), glibc compatibility shim, compiler wrapper scripts,
+and portions of the Luna adapter and target configuration are derived from
+punktfunk/client-webos, commit 678ef23436f0ec534dfdceea45b12031f20dd595.
+https://github.com/punktfunk/client-webos
+
+Punktfunk is available under MIT OR Apache-2.0. Both license texts are retained
+in vendor/punktfunk. This distribution uses its MIT option.
+
+Application artwork and the Inter font are bundled from catalog/ at build time.
+Asset sources are recorded in docs/ASSETS.json in the source distribution.
+The Home icon is distributed under the MIT license in LICENSE.
+Publisher artwork overrides are documented in artwork/SOURCES.json (included
+as artwork-sources.json in packages). Artwork belongs to its respective publishers.
+Inter is distributed under the SIL Open Font License; assets/Inter-OFL.txt
+is included in generated packages.
+
+The native SDL binary is from webosbrew/SDL-webOS (zlib license).
+https://github.com/webosbrew/SDL-webOS
+FreeType and Skia third-party notices are included when packaging.
+Portions of this software are copyright © 2022 The FreeType Project
+(www.freetype.org). All rights reserved.
+See vendor/third-party and the generated licenses/ directory for notices.

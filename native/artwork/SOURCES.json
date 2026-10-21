@@ -1,0 +1,22 @@
+[
+  {
+    "file": "apple-tv.png",
+    "publisher_app": "Apple TV",
+    "source": "https://play-lh.googleusercontent.com/T5tmhzEpX3GPMVcQpOsSLuOz3WRjOdmvJaZ5Rs-6jDZKBGv5qGWdqfTK3Pvz9YZXUmLpBbhUzt2XBvBrnekuDw",
+    "metadata": "https://play.google.com/store/apps/details?id=com.apple.atve.androidtv.appletv",
+    "retrieved": "2026-10-20",
+    "note": "Adapted publisher artwork for this launcher; not covered by the repository MIT license.",
+    "original": "originals/apple-tv.png",
+    "edit": "Background edges cleaned and gradient extended using built-in image_gen; restored to 512x512. ZEE5 mark reduced for breathing room in the wide tile. Prompts: EDIT-PROMPTS.json."
+  },
+  {
+    "file": "zee5.png",
+    "publisher_app": "Zee 5",
+    "source": "https://play-lh.googleusercontent.com/NyMT3ByjkBG1FhdFX9GSj_0mXLNIAuz_IZO8Xr9Noow6D4IQs-Srai9Hklad5gDasSv6F5tHYwsquk1mXErQ5A",
+    "metadata": "https://play.google.com/store/apps/details?id=com.graymatrix.did",
+    "retrieved": "2026-10-20",
+    "note": "Adapted publisher artwork for this launcher; not covered by the repository MIT license.",
+    "original": "originals/zee5.jpg",
+    "edit": "Background edges cleaned and gradient extended using built-in image_gen; restored to 512x512. ZEE5 mark reduced for breathing room in the wide tile. Prompts: EDIT-PROMPTS.json."
+  }
+]

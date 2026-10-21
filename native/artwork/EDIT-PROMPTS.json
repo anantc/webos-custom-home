@@ -1,0 +1,13 @@
+{
+  "tool": "built-in image_gen",
+  "edits": [
+    {
+      "asset": "Apple TV",
+      "prompt": "Use case: precise-object-edit. Edit target: the supplied Apple TV app icon. Production image cleanup, not a redesign. Keep the central Apple logo and lowercase tv lettering, their exact shapes, colours, highlights, size and position unchanged. Remove ONLY the outer rounded-square boundary, rim, bevel, reflections, bright edge highlights and transparent corner cutouts by effectively cropping about 30 pixels from the edges of the 512px reference, then seamlessly extending the surrounding interior charcoal-to-black background gradient back to the original square canvas size. Opaque full-bleed dark gradient all the way to all four square corners; no frame, no outline, no rounded boundary. Do not enlarge the central logo. The TV launcher supplies its own rounded clipping. Deliver one square 512x512 icon, same composition and dimensions as the reference, without margins, mockup or added text."
+    },
+    {
+      "asset": "ZEE5",
+      "prompt": "Use case: precise-object-edit. Edit target: the supplied ZEE5 Z5 app icon. Production image cleanup, not a redesign. Keep the exact white Z and 5 glyph shapes and their relationship unchanged. Clean up the outside edges by effectively cropping about 30 pixels of background from each edge, then extending the surrounding charcoal-purple gradient seamlessly back to the original square canvas size. Give the complete Z5 mark a little more breathing room: scale the mark uniformly to 84 percent of its current size around the canvas centre, while preserving its exact shape, proportions and white colour. Keep the background subtle dark charcoal-purple with original top-right-to-bottom-left lighting. Full-bleed square gradient, no border, bevel, separate inset square, rim or rounded corners. The mark must be fully intact and well inside the central horizontal band, because the app shows a wide crop. Deliver one square 512x512 icon, with no added wording, margins or mockup."
+    }
+  ]
+}

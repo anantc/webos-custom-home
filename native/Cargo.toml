@@ -1,0 +1,26 @@
+[package]
+name = "tvhome-native"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Native Rust/SDL3/Skia Home screen for LG webOS"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+libc = "0.2"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+sdl3 = { version = "0.20", default-features = false }
+sdl3-sys = { version = "0.7", default-features = false }
+skia-safe = { version = "=0.153.3", features = ["gl", "textlayout"] }
+
+[features]
+host-sdl = ["sdl3-sys/build-from-source"]
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+panic = "abort"

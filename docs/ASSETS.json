@@ -1,0 +1,75 @@
+[
+  {
+    "file": "catalog/artwork/prime-video.jpg",
+    "publisher_app": "Amazon Prime Video",
+    "source": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/42/8d/99/428d995b-e927-8925-31b4-12d7c843c30f/App_Icon-marketing.lsr/512x512bb.jpg",
+    "metadata": "https://itunes.apple.com/lookup?id=545519333&country=in",
+    "note": "Publisher artwork. Not covered by this repository’s MIT licence."
+  },
+  {
+    "file": "catalog/artwork/sonyliv.jpg",
+    "publisher_app": "Sony LIV",
+    "source": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/45/4e/fb/454efbe4-0898-c4d3-5739-fbc1aacaae7f/App_Icon-marketing.lsr/512x512bb.jpg",
+    "metadata": "https://itunes.apple.com/lookup?id=587794258&country=in",
+    "note": "Publisher artwork. Not covered by this repository’s MIT licence."
+  },
+  {
+    "file": "catalog/artwork/spotify.jpg",
+    "publisher_app": "Spotify: Music and Podcasts",
+    "source": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/c2/d5/0c/c2d50cce-7468-4baa-b32e-40e1176b594c/AppIconSmall-marketing.lsr/512x512bb.jpg",
+    "metadata": "https://itunes.apple.com/lookup?id=324684580&country=in",
+    "note": "Publisher artwork. Not covered by this repository’s MIT licence."
+  },
+  {
+    "file": "catalog/artwork/youtube.jpg",
+    "publisher_app": "YouTube",
+    "source": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/49/d6/91/49d6917f-12a2-e8bd-f995-fd5c836d598a/AppIconSmall-marketing.lsr/512x512bb.jpg",
+    "metadata": "https://itunes.apple.com/lookup?id=544007664&country=in",
+    "note": "Publisher artwork. Not covered by this repository’s MIT licence."
+  },
+  {
+    "file": "catalog/artwork/netflix.jpg",
+    "publisher_app": "Netflix",
+    "source": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/b3/d9/39/b3d9396e-06fd-1126-332b-a8cb660cb704/App_Icon-marketing.lsr/512x512bb.jpg",
+    "metadata": "https://itunes.apple.com/lookup?id=363590051&country=in",
+    "note": "Publisher artwork. Not covered by this repository’s MIT licence."
+  },
+  {
+    "file": "catalog/artwork/jiohotstar.jpg",
+    "publisher_app": "JioHotstar",
+    "source": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/45/7a/09/457a09de-5fb4-e0ce-a4f2-f8f151ada21b/App_Icon-marketing.lsr/512x512bb.jpg",
+    "metadata": "https://itunes.apple.com/lookup?id=934459219&country=in",
+    "note": "Publisher artwork. Not covered by this repository’s MIT licence."
+  },
+  {
+    "file": "catalog/artwork/zee5.jpg",
+    "publisher_app": "Zee 5",
+    "source": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/6b/aa/54/6baa542a-ffb8-2a2e-a5ab-72f394fd4355/AppIcon-0-0-1x_U007emarketing-0-11-0-0-85-220.png/512x512bb.jpg",
+    "metadata": "https://itunes.apple.com/lookup?id=743691886&country=in",
+    "note": "Publisher artwork. Not covered by this repository’s MIT licence."
+  },
+  {
+    "file": "catalog/artwork/apple-tv.jpg",
+    "publisher_app": "Apple TV",
+    "source": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/a2/74/61/a274610a-1537-0429-df1b-afacfad5a478/tvCalistoga-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg",
+    "metadata": "https://itunes.apple.com/lookup?id=1174078549&country=in",
+    "note": "Publisher artwork. Not covered by this repository’s MIT licence."
+  },
+  {
+    "file": "catalog/fonts/Inter.ttf",
+    "source": "https://github.com/google/fonts/tree/main/ofl/inter",
+    "license": "SIL Open Font License 1.1; catalog/fonts/Inter-OFL.txt"
+  },
+  {
+    "file": "native/packaging/home-icon.svg",
+    "note": "Flat white house on black; MIT, see LICENSE."
+  },
+  {
+    "file": "native/packaging/icon-flat.png",
+    "note": "80 px rendering of home-icon.svg; MIT."
+  },
+  {
+    "file": "native/packaging/largeIcon-flat.png",
+    "note": "130 px rendering of home-icon.svg; MIT."
+  }
+]

@@ -1,0 +1,6 @@
+assets/
+target/
+.toolchains/
+dist/
+state/
+*.log

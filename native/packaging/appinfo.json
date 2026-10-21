@@ -1,0 +1,16 @@
+{
+  "id": "com.anant.tvhome.native",
+  "version": "0.1.0",
+  "vendor": "Anant",
+  "type": "native",
+  "main": "bin/tvhome-native",
+  "title": "Home",
+  "icon": "icon-flat.png",
+  "largeIcon": "largeIcon-flat.png",
+  "iconColor": "#000000",
+  "supportTouchMode": "full",
+  "useAllMouseButtons": true,
+  "requiredACG": [
+    "application.launcher"
+  ]
+}

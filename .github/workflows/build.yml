@@ -1,0 +1,142 @@
+name: Build and release
+
+on:
+  pull_request:
+    paths:
+      - 'cli/**'
+      - 'native/**'
+      - 'catalog/**'
+      - 'tests/**'
+      - '.github/workflows/build.yml'
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  home-package:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test and build the Home payload
+        run: |
+          node --test tests/*.test.cjs
+          ./native/dev.sh test
+          ./native/dev.sh lint
+          ./native/dev.sh template
+      - uses: actions/upload-artifact@v4
+        with:
+          name: home-template
+          path: native/dist/template/*
+          if-no-files-found: error
+
+  build:
+    needs: home-package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            platform: darwin-arm64
+          - runner: macos-15-intel
+            platform: darwin-x64
+          - runner: ubuntu-22.04-arm
+            platform: linux-arm64
+          - runner: ubuntu-22.04
+            platform: linux-x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: home-template
+          path: native/dist/template
+      - name: Prepare build tools on the runner
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo apt-get update
+            sudo apt-get install -y build-essential perl pkg-config
+          fi
+      - name: Check and build
+        shell: bash
+        run: |
+          node --test tests/installer.test.cjs
+          node cli/licenses.cjs
+          cargo fmt --manifest-path cli/Cargo.toml --check
+          cargo test --locked --manifest-path cli/Cargo.toml --features portable,bundled-home
+          cargo clippy --locked --manifest-path cli/Cargo.toml --features portable,bundled-home --all-targets -- -D warnings
+          cargo build --locked --release --manifest-path cli/Cargo.toml --features portable,bundled-home
+      - name: Check executable portability
+        shell: bash
+        run: |
+          ./cli/target/release/tvhome --help
+          if [ "$RUNNER_OS" = Linux ]; then
+            ldd cli/target/release/tvhome > /tmp/tvhome-libraries.txt
+            cat /tmp/tvhome-libraries.txt
+            if grep -E 'lib(ssl|crypto|ssh2|z)\.so|not found' /tmp/tvhome-libraries.txt; then
+              echo 'Release must bundle its SSH, OpenSSL and compression libraries.'
+              exit 1
+            fi
+          else
+            codesign --force --sign - cli/target/release/tvhome
+            codesign --verify cli/target/release/tvhome
+          fi
+      - name: Package executable and notices
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          EXPECTED_PLATFORM: ${{ matrix.platform }}
+        shell: bash
+        run: |
+          node -e 'if (process.platform+"-"+process.arch !== process.env.EXPECTED_PLATFORM) process.exit(1)'
+          if [ "$REF_TYPE" = tag ]; then export RELEASE_TAG="$TAG_NAME"; fi
+          node cli/release.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tvhome-${{ matrix.platform }}
+          path: cli/dist/*
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tvhome-*
+          merge-multiple: true
+          path: downloads
+      - name: Verify and publish the complete set
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          cd downloads
+          for target in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
+            sha256sum --check "tvhome-$target.sha256"
+            sha256sum --check "tvhome-$target.licenses.txt.sha256"
+          done
+          gh release create "$TAG_NAME" ./* --verify-tag --draft --title "tvhome ${TAG_NAME#v}" --notes 'Home setup for macOS 13+ and Linux glibc 2.35+, on ARM64 and x64. Download the executable for your computer and its .sha256 file. Verify it, make it executable and run --install. Each executable embeds the Home TV app and license notices. Setup: https://github.com/anantc/webos-custom-home/blob/main/docs/SETUP.md'
+          gh release edit "$TAG_NAME" --draft=false
