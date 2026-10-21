@@ -15,6 +15,22 @@ The settings menu offers **Inputs**, **TV settings** and **Exit**. Back closes a
 panel; from Inputs, it returns to the settings menu. Back on the app grid or
 holding Back exits Home.
 
+## Pin inputs to Home
+
+Open **Inputs** from the settings menu. Select an input name to switch to it,
+or select the pin beside it to add a tile to Home. A filled pin means the input
+is pinned; select it again to remove the tile. Live TV can also be pinned.
+
+With the remote, Right moves from an input name to its pin, Left returns to the
+name, and OK toggles the pin. Up and Down stay in the same column. The pointer
+can click either target directly. Back returns to settings.
+
+Pinned inputs appear after your apps, in the order you pinned them. Each tile
+shows the TV's input name and switches directly to that input when selected.
+Choices are saved on that TV and survive app restarts and catalog refreshes.
+If an input temporarily disappears from the TV's catalog, its tile returns when
+the input is reported again. Removing Home also removes its saved pins.
+
 ## Wi-Fi
 
 Select the top-left Wi-Fi icon to see the network name, signal level, IP address
@@ -30,6 +46,18 @@ and router address when the TV supplies them.
 
 Bars describe wireless signal strength, not download or upload speed. The panel
 displays information about the current connection.
+
+### Speed test
+
+Open **Wi-Fi → Speed test → Run speed test** to measure download and upload
+speed in Mbps and latency in milliseconds using Netflix's Fast.com servers.
+The test uses the TV's current internet connection, including Ethernet if connected.
+It takes about 30 seconds and can transfer hundreds of megabytes on a fast connection.
+
+**Cancel test**, Back or leaving Home stops the test. The latest completed result
+and its time are saved on that TV; **Test again** starts a fresh measurement.
+A failed or cancelled test keeps the previous completed result. Test results can
+vary with other network traffic and the selected server.
 
 ## Opening Home
 

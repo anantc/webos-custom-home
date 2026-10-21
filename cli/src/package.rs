@@ -51,7 +51,7 @@ fn unpack_tar(bytes: &[u8]) -> Result<Files> {
         }) {
             return Err(fault("Unsafe package path."));
         }
-        let name = raw
+        let mut name = raw
             .components()
             .filter_map(|c| match c {
                 Component::Normal(s) => s.to_str(),
@@ -62,10 +62,11 @@ fn unpack_tar(bytes: &[u8]) -> Result<Files> {
         if name.is_empty() {
             continue;
         }
-        if entry.header().entry_type().is_dir() {
-            continue;
+        let directory = entry.header().entry_type().is_dir();
+        if directory {
+            name.push('/');
         }
-        if !entry.header().entry_type().is_file() {
+        if !directory && !entry.header().entry_type().is_file() {
             return Err(fault(
                 "Package contains unsupported links or special files.",
             ));
@@ -75,6 +76,9 @@ fn unpack_tar(bytes: &[u8]) -> Result<Files> {
             .mode()
             .map_err(|_| fault("Invalid package permissions."))?;
         let content = bounded(&mut entry, LIMIT)?;
+        if directory && !content.is_empty() {
+            return Err(fault("Package directory contains unexpected data."));
+        }
         if files.insert(name, (mode, content)).is_some() || files.len() > 4096 {
             return Err(fault("Duplicate or excessive package entries."));
         }
@@ -86,6 +90,11 @@ fn pack_tar(files: &Files) -> Result<Vec<u8>> {
     for (name, (mode, bytes)) in files {
         let mut header = tar::Header::new_gnu();
         header.set_size(bytes.len() as u64);
+        header.set_entry_type(if name.ends_with('/') {
+            tar::EntryType::Directory
+        } else {
+            tar::EntryType::Regular
+        });
         header.set_mode(*mode);
         header.set_uid(0);
         header.set_gid(0);
@@ -389,10 +398,38 @@ mod tests {
         assert!(Package::read(&[]).is_err());
     }
     #[test]
-    fn tar_round_trip_preserves_executable_permissions() {
-        let files = BTreeMap::from([("bin/home".into(), (0o755, b"binary".to_vec()))]);
-        let result = unpack_tar(&pack_tar(&files).unwrap()).unwrap();
-        assert_eq!(result, files);
+    fn tar_round_trip_preserves_file_and_directory_permissions() {
+        // Without directory entries, extraction creates root-owned 0755 parents,
+        // preventing the TV's unprivileged app from saving settings.
+        let files = BTreeMap::from([
+            ("app/".into(), (0o755, Vec::new())),
+            ("app/bin/".into(), (0o755, Vec::new())),
+            ("app/bin/home".into(), (0o755, b"binary".to_vec())),
+            ("app/state/".into(), (0o777, Vec::new())),
+        ]);
+        let archive = pack_tar(&files).unwrap();
+        assert_eq!(unpack_tar(&archive).unwrap(), files);
+        let dir = tempfile::tempdir().unwrap();
+        tar::Archive::new(GzDecoder::new(archive.as_slice()))
+            .unpack(dir.path())
+            .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(dir.path().join("app/state"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o777
+        );
+        assert_eq!(
+            std::fs::metadata(dir.path().join("app/bin/home"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o755
+        );
     }
     #[cfg(feature = "bundled-home")]
     #[tokio::test]
@@ -409,6 +446,12 @@ mod tests {
             .await
             .unwrap();
         let result = Package::read(&bytes).unwrap();
+        let state = result
+            .data
+            .get(&format!("{ROOT}state/"))
+            .expect("Personalization must preserve the writable state directory");
+        assert_eq!(state.0 & 0o777, 0o777);
+        assert!(state.1.is_empty());
         let catalog: Value =
             serde_json::from_slice(member(&result.data, "assets/catalog.json").unwrap()).unwrap();
         assert_eq!(catalog["preview"], false);

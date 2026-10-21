@@ -3,7 +3,9 @@ mod catalog;
 mod gl;
 mod model;
 mod platform;
+mod preferences;
 mod render;
+mod speedtest;
 
 use anyhow::{Context, Result};
 use model::*;
@@ -18,23 +20,32 @@ enum Panel {
     Controls,
     Inputs,
     Wifi,
+    SpeedTest,
 }
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum FocusTarget {
     Header(Header),
     App(usize),
     Menu(Panel, usize),
+    Pin(usize),
 }
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Header {
     Wifi,
     Controls,
 }
+#[derive(Debug, PartialEq)]
+enum Action {
+    Launch(String, String),
+    TogglePin(String),
+    SpeedTest,
+}
 struct Ui {
     selected: usize,
     header: Option<Header>,
     panel: Option<Panel>,
     panel_index: usize,
+    pin_focused: bool,
     scroll: Tween,
     scales: Vec<Tween>,
     toast: Option<(String, Instant)>,
@@ -50,6 +61,7 @@ impl Ui {
             header: None,
             panel: None,
             panel_index: 0,
+            pin_focused: false,
             scroll: Tween::new(0.0),
             scales,
             toast: None,
@@ -86,18 +98,21 @@ impl Ui {
     }
     fn items(&self, catalog: &Catalog) -> Vec<String> {
         if self.panel == Some(Panel::Wifi) {
-            return vec!["Close".into()];
+            return vec!["Speed test".into(), "Close".into()];
+        }
+        if self.panel == Some(Panel::SpeedTest) {
+            return vec!["Run speed test".into(), "Back".into()];
         }
         if self.panel == Some(Panel::Inputs) {
-            let mut items: Vec<String> = catalog.inputs.iter().map(|i| i.label.clone()).collect();
-            items.push("Live TV".into());
-            items
+            catalog.input_items().into_iter().map(|i| i.label).collect()
         } else {
             vec!["Inputs".into(), "TV settings".into(), "Exit".into()]
         }
     }
     fn focus_target(&self) -> Option<FocusTarget> {
-        if let Some(panel) = self.panel {
+        if self.panel == Some(Panel::Inputs) && self.pin_focused {
+            Some(FocusTarget::Pin(self.panel_index))
+        } else if let Some(panel) = self.panel {
             Some(FocusTarget::Menu(panel, self.panel_index))
         } else if let Some(header) = self.header {
             Some(FocusTarget::Header(header))
@@ -116,6 +131,10 @@ impl Ui {
             match direction {
                 Direction::Up => self.panel_index = self.panel_index.saturating_sub(1),
                 Direction::Down => self.panel_index = (self.panel_index + 1).min(count - 1),
+                Direction::Left if self.panel == Some(Panel::Inputs) && self.pin_focused => {
+                    self.pin_focused = false
+                }
+                Direction::Right if self.panel == Some(Panel::Inputs) => self.pin_focused = true,
                 Direction::Left => self.back(),
                 _ => (),
             }
@@ -137,7 +156,11 @@ impl Ui {
         }
     }
     fn back(&mut self) {
-        if self.panel == Some(Panel::Wifi) {
+        self.pin_focused = false;
+        if self.panel == Some(Panel::SpeedTest) {
+            self.panel = Some(Panel::Wifi);
+            self.panel_index = 0;
+        } else if self.panel == Some(Panel::Wifi) {
             self.panel = None;
             self.header = Some(Header::Wifi);
         } else if self.panel == Some(Panel::Inputs) {
@@ -151,29 +174,44 @@ impl Ui {
             self.quit = true;
         }
     }
-    fn activate(&mut self, catalog: &Catalog) -> Option<(String, String)> {
-        if self.panel == Some(Panel::Wifi) {
+    fn activate(&mut self, catalog: &Catalog) -> Option<Action> {
+        if self.panel == Some(Panel::SpeedTest) {
+            if self.panel_index == 0 {
+                return Some(Action::SpeedTest);
+            }
             self.back();
             return None;
         }
+        if self.panel == Some(Panel::Wifi) {
+            if self.panel_index == 0 {
+                self.panel = Some(Panel::SpeedTest);
+                self.panel_index = 0;
+            } else {
+                self.back();
+            }
+            return None;
+        }
         if self.panel == Some(Panel::Inputs) {
-            let value = catalog
-                .inputs
-                .get(self.panel_index)
-                .map(|i| (i.app_id.clone(), i.label.clone()))
-                .unwrap_or_else(|| ("com.webos.app.livetv".into(), "Live TV".into()));
+            let input = catalog.input_items().get(self.panel_index)?.clone();
+            if self.pin_focused {
+                return Some(Action::TogglePin(input.app_id));
+            }
             self.panel = None;
-            return Some(value);
+            return Some(Action::Launch(input.app_id, input.label));
         }
         if self.panel == Some(Panel::Controls) {
             match self.panel_index {
                 0 => {
                     self.panel = Some(Panel::Inputs);
                     self.panel_index = 0;
+                    self.pin_focused = false;
                 }
                 1 => {
                     self.panel = None;
-                    return Some(("com.palm.app.settings".into(), "TV settings".into()));
+                    return Some(Action::Launch(
+                        "com.palm.app.settings".into(),
+                        "TV settings".into(),
+                    ));
                 }
                 _ => self.quit = true,
             }
@@ -185,19 +223,34 @@ impl Ui {
             self.panel_index = 0;
         } else {
             let app = &catalog.apps[self.selected];
-            return Some((app.id.clone(), app.title.clone()));
+            return Some(Action::Launch(app.id.clone(), app.title.clone()));
         }
         None
     }
     fn pointer(&mut self, x: f32, y: f32, catalog: &Catalog) -> bool {
-        if self.panel == Some(Panel::Wifi) {
-            let (left, top, width, height) = wifi_close_bounds();
-            return (left..left + width).contains(&x) && (top..top + height).contains(&y);
+        if matches!(self.panel, Some(Panel::Wifi | Panel::SpeedTest)) {
+            for i in 0..2 {
+                let (left, top, width, height) = if self.panel == Some(Panel::Wifi) {
+                    wifi_action_bounds(i)
+                } else {
+                    speed_action_bounds(i)
+                };
+                if (left..left + width).contains(&x) && (top..top + height).contains(&y) {
+                    self.panel_index = i;
+                    return true;
+                }
+            }
+            return false;
         }
         if self.panel.is_some() {
             if (1244.0..1796.0).contains(&x) && y >= PANEL_ROW_TOP {
                 let i = ((y - PANEL_ROW_TOP) / PANEL_ROW_STEP) as usize;
-                if i < self.items(catalog).len() {
+                if i < self.items(catalog).len() && (y - PANEL_ROW_TOP) % PANEL_ROW_STEP < 76.0 {
+                    if self.panel == Some(Panel::Inputs) && (PIN_LEFT - 12.0..PIN_LEFT).contains(&x)
+                    {
+                        return false;
+                    }
+                    self.pin_focused = self.panel == Some(Panel::Inputs) && x >= PIN_LEFT;
                     self.panel_index = i;
                     return true;
                 }
@@ -240,12 +293,36 @@ fn main() -> Result<()> {
             .join("assets")
     };
     let initial_catalog = std::fs::read(assets.join("catalog.json"))?;
-    let mut catalog: Catalog = serde_json::from_slice(&initial_catalog)?;
-    catalog.validate(preview)?;
+    let mut source_catalog: Catalog = serde_json::from_slice(&initial_catalog)?;
+    source_catalog.validate(preview)?;
+    let preferences_path = if preview {
+        assets
+            .parent()
+            .context("assets directory")?
+            .join("state/preview-preferences.json")
+    } else {
+        assets
+            .parent()
+            .context("app directory")?
+            .join("state/preferences.json")
+    };
+    let mut pins = preferences::Pins::load(&preferences_path).unwrap_or_else(|error| {
+        tracing::warn!(%error, "Could not read pinned inputs");
+        preferences::Pins::default()
+    });
+    let result_path = preferences_path.with_file_name(if preview {
+        "preview-speedtest-result.json"
+    } else {
+        "speedtest-result.json"
+    });
+    let mut speed_test = speedtest::Monitor::new(result_path, preview);
+    let pin_writer = preferences::writer(preferences_path);
+    let mut pin_pending = false;
+    let mut catalog = pins.catalog(&source_catalog);
     let catalog_worker = catalog::worker(assets.clone(), preview, initial_catalog);
     let mut catalog_check = Instant::now();
     let mut renderer = render::Renderer::new(&assets, catalog.apps.len())?;
-    let decoded = render::decode_icons(&assets, &catalog.apps);
+    let decoded = render::decode_icons(&assets, &source_catalog.apps);
     let launcher = platform::luna::worker(preview);
     let wifi_worker = wifi::worker(preview);
     let mut wifi_monitor = wifi::Monitor::new(Instant::now());
@@ -261,6 +338,14 @@ fn main() -> Result<()> {
         .opengl()
         .fullscreen()
         .build()?;
+    // SDL inhibits idle screensavers by default; leave idle policy to webOS.
+    match video.enable_screen_saver() {
+        Ok(()) => tracing::info!(
+            allowed = video.is_screen_saver_enabled(),
+            "SDL screensaver inhibition released"
+        ),
+        Err(error) => tracing::warn!(%error, "Could not release SDL screensaver inhibition"),
+    }
     let mut graphics = gl::ConsoleGl::new(&window, &video)?;
     graphics.set_swap_interval(&video, true);
     let mut sounds = audio::NavigationSound::new(&sdl);
@@ -286,6 +371,7 @@ fn main() -> Result<()> {
             Err(e) => tracing::warn!(index = i, error = %e, "icon unavailable; using fallback"),
         }
     }
+    let mut source_icons = renderer.icons[..source_catalog.apps.len()].to_vec();
     let warm_items = ui.items(&catalog);
     let scales: Vec<f32> = ui.scales.iter().map(Tween::value).collect();
     {
@@ -302,9 +388,13 @@ fn main() -> Result<()> {
                 clock: &clock,
                 date: &date,
                 panel: Some((&warm_items, 0)),
+                input_pins: None,
+                pin_focused: false,
                 wifi: &wifi_monitor.status,
                 wifi_focused: false,
                 wifi_details: true,
+                wifi_selection: 0,
+                speed_test: None,
                 toast: Some("Home"),
                 metrics: None,
             },
@@ -347,6 +437,7 @@ fn main() -> Result<()> {
                     }
                     WindowEvent::FocusLost | WindowEvent::Hidden | WindowEvent::Minimized => {
                         focused = false;
+                        speed_test.cancel();
                         sounds.suspend();
                     }
                     _ => (),
@@ -408,6 +499,12 @@ fn main() -> Result<()> {
                 }
                 _ => (),
             }
+            if previous_panel == Some(Panel::SpeedTest) && ui.panel != previous_panel {
+                speed_test.cancel();
+            }
+            if launch == Some(Action::SpeedTest) {
+                speed_test.toggle();
+            }
             let current_target = ui.focus_target();
             if focused
                 && navigation
@@ -419,7 +516,20 @@ fn main() -> Result<()> {
             if ui.panel == Some(Panel::Wifi) && previous_panel != ui.panel {
                 wifi_monitor.refresh(Instant::now());
             }
-            if let Some(request) = launch {
+            if let Some(Action::TogglePin(id)) = &launch {
+                if !pin_pending {
+                    if pin_writer.requests.try_send(pins.toggled(id)).is_ok() {
+                        pin_pending = true;
+                    } else {
+                        ui.toast = Some((
+                            "Could not save pinned inputs. Reopen Home.".into(),
+                            Instant::now(),
+                        ));
+                    }
+                }
+            }
+            if let Some(Action::Launch(id, title)) = launch {
+                let request = (id, title);
                 sounds.suspend();
                 ui.toast = None;
                 if let Err(std::sync::mpsc::TrySendError::Disconnected(_)) =
@@ -436,10 +546,33 @@ fn main() -> Result<()> {
                 dirty = true;
             }
         }
+        dirty |= speed_test.poll();
+        let mut refresh_catalog = false;
         for update in catalog_worker.results.try_iter() {
-            ui.reconcile(&catalog, &update.catalog);
-            catalog = update.catalog;
-            renderer.icons = update.icons;
+            source_catalog = update.catalog;
+            source_icons = update.icons;
+            refresh_catalog = true;
+        }
+        for result in pin_writer.results.try_iter() {
+            pin_pending = false;
+            match result {
+                Ok(saved) => {
+                    pins = saved;
+                    refresh_catalog = true;
+                }
+                Err(error) => {
+                    tracing::warn!(error = %format!("{error:#}"), "Could not save pinned inputs");
+                    ui.toast = Some((preferences::save_error(&error), Instant::now()));
+                    dirty = true;
+                }
+            }
+        }
+        if refresh_catalog {
+            let updated = pins.catalog(&source_catalog);
+            ui.reconcile(&catalog, &updated);
+            catalog = updated;
+            renderer.icons = source_icons.clone();
+            renderer.icons.resize(catalog.apps.len(), None);
             dirty = true;
         }
         if focused
@@ -503,6 +636,11 @@ fn main() -> Result<()> {
             graphics.make_current(&window)?;
             let size = window.size();
             let items = ui.items(&catalog);
+            let input_pins: Vec<bool> = catalog
+                .input_items()
+                .iter()
+                .map(|i| pins.contains(&i.app_id))
+                .collect();
             let scales: Vec<f32> = ui.scales.iter().map(Tween::value).collect();
             renderer.draw(
                 graphics.surface(size.0, size.1)?.canvas(),
@@ -516,11 +654,16 @@ fn main() -> Result<()> {
                     date: &date,
                     panel: ui
                         .panel
-                        .filter(|p| *p != Panel::Wifi)
+                        .filter(|p| !matches!(p, Panel::Wifi | Panel::SpeedTest))
                         .map(|_| (items.as_slice(), ui.panel_index)),
+                    input_pins: (ui.panel == Some(Panel::Inputs)).then_some(input_pins.as_slice()),
+                    pin_focused: ui.pin_focused,
                     wifi: &wifi_monitor.status,
                     wifi_focused: ui.header == Some(Header::Wifi),
                     wifi_details: ui.panel == Some(Panel::Wifi),
+                    wifi_selection: ui.panel_index,
+                    speed_test: (ui.panel == Some(Panel::SpeedTest))
+                        .then_some((&speed_test.state, ui.panel_index)),
                     toast: ui.toast.as_ref().map(|(s, _)| s.as_str()),
                     metrics: if ui.metrics { Some(&metric_text) } else { None },
                 },
@@ -568,6 +711,7 @@ fn main() -> Result<()> {
             }
         }
     }
+    speed_test.cancel();
     graphics.release_resources();
     Ok(())
 }
@@ -587,6 +731,7 @@ mod tests {
                     contain: false,
                     color: [0, 0, 0],
                     background: None,
+                    input: false,
                 })
                 .collect(),
             inputs: (1..=2)
@@ -679,6 +824,68 @@ mod tests {
     }
 
     #[test]
+    fn input_pin_is_separate_from_switching_with_remote_and_pointer() {
+        let catalog = catalog();
+        let mut ui = Ui::new(catalog.apps.len());
+        ui.panel = Some(Panel::Inputs);
+        ui.direction(Direction::Right, &catalog);
+        assert_eq!(ui.focus_target(), Some(FocusTarget::Pin(0)));
+        assert_eq!(
+            ui.activate(&catalog),
+            Some(Action::TogglePin("preview.hdmi1".into()))
+        );
+        assert_eq!(ui.panel, Some(Panel::Inputs));
+        ui.direction(Direction::Down, &catalog);
+        assert_eq!(ui.focus_target(), Some(FocusTarget::Pin(1)));
+        ui.direction(Direction::Left, &catalog);
+        assert_eq!(ui.focus_target(), Some(FocusTarget::Menu(Panel::Inputs, 1)));
+        assert_eq!(
+            ui.activate(&catalog),
+            Some(Action::Launch("preview.hdmi2".into(), "HDMI 2".into()))
+        );
+        assert_eq!(ui.panel, None);
+        ui.panel = Some(Panel::Inputs);
+        assert!(ui.pointer(PIN_LEFT + 35.0, PANEL_ROW_TOP + 35.0, &catalog));
+        assert_eq!(
+            ui.activate(&catalog),
+            Some(Action::TogglePin("preview.hdmi1".into()))
+        );
+        assert!(!ui.pointer(PIN_LEFT - 6.0, PANEL_ROW_TOP + 35.0, &catalog));
+        assert!(!ui.pointer(PIN_LEFT + 35.0, PANEL_ROW_TOP + 80.0, &catalog));
+        assert!(ui.pointer(1300.0, PANEL_ROW_TOP + 35.0, &catalog));
+        assert_eq!(
+            ui.activate(&catalog),
+            Some(Action::Launch("preview.hdmi1".into(), "HDMI 1".into()))
+        );
+        ui.panel = Some(Panel::Inputs);
+        ui.pin_focused = true;
+        ui.back();
+        assert_eq!(ui.panel, Some(Panel::Controls));
+        assert!(!ui.pin_focused);
+    }
+
+    #[test]
+    fn pinned_tile_launches_input_and_catalog_refresh_keeps_its_selection() {
+        let base = catalog();
+        let pins = preferences::Pins::default().toggled("preview.hdmi1");
+        let catalog = pins.catalog(&base);
+        let mut ui = Ui::new(catalog.apps.len());
+        ui.select(2, catalog.apps.len());
+        assert_eq!(
+            ui.activate(&catalog),
+            Some(Action::Launch("preview.hdmi1".into(), "HDMI 1".into()))
+        );
+        let mut refreshed = base.clone();
+        refreshed.apps.reverse();
+        let refreshed = pins.catalog(&refreshed);
+        ui.reconcile(&catalog, &refreshed);
+        assert_eq!(refreshed.apps[ui.selected].id, "preview.hdmi1");
+        ui.reconcile(&refreshed, &base);
+        assert!(ui.selected < base.apps.len());
+        assert_eq!(ui.scales.len(), base.apps.len());
+    }
+
+    #[test]
     fn wifi_icon_opens_details_and_returns_to_the_icon() {
         let catalog = catalog();
         let mut ui = Ui::new(2);
@@ -695,7 +902,7 @@ mod tests {
         assert!(ui.activate(&catalog).is_none());
         assert_eq!(ui.panel, Some(Panel::Wifi));
         assert!(!ui.pointer(200.0, 400.0, &catalog));
-        let (x, y, _, _) = wifi_close_bounds();
+        let (x, y, _, _) = wifi_action_bounds(1);
         assert!(ui.pointer(x + 20.0, y + 20.0, &catalog));
         ui.activate(&catalog);
         assert_eq!(ui.panel, None);
@@ -715,5 +922,26 @@ mod tests {
         ui.direction(Direction::Down, &catalog);
         ui.activate(&catalog);
         assert!(ui.quit);
+    }
+
+    #[test]
+    fn speed_test_requires_explicit_start_and_back_returns_to_wifi() {
+        let catalog = catalog();
+        let mut ui = Ui::new(2);
+        ui.direction(Direction::Up, &catalog);
+        assert!(ui.activate(&catalog).is_none());
+        assert_eq!(ui.panel, Some(Panel::Wifi));
+        assert!(ui.activate(&catalog).is_none());
+        assert_eq!(ui.panel, Some(Panel::SpeedTest));
+        assert_eq!(ui.activate(&catalog), Some(Action::SpeedTest));
+        let (x, y, _, _) = speed_action_bounds(1);
+        assert!(!ui.pointer(x, y - 5.0, &catalog));
+        assert!(ui.pointer(x + 20.0, y + 20.0, &catalog));
+        assert!(ui.activate(&catalog).is_none());
+        assert_eq!(ui.panel, Some(Panel::Wifi));
+        assert_eq!(ui.panel_index, 0);
+        ui.activate(&catalog);
+        ui.direction(Direction::Left, &catalog);
+        assert_eq!(ui.panel, Some(Panel::Wifi));
     }
 }

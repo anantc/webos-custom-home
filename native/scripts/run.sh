@@ -32,7 +32,10 @@ fi
 mkdir -p "$output"
 stage="$(mktemp -d "$output/stage.XXXXXX")"
 trap 'rm -rf "$stage"' EXIT
-mkdir -p "$stage/bin" "$stage/lib"
+mkdir -p "$stage/bin" "$stage/lib" "$stage/state"
+# webOS runs native apps as an unprivileged user assigned at launch.
+chmod 0777 "$stage/state"
+touch "$stage/state/.keep"
 cp target/armv7-unknown-linux-gnueabi/release/tvhome-native "$stage/bin/"
 cp -L "$SDL3_PREFIX/lib/libSDL3.so.0" "$stage/lib/"
 cp -L "$TVHOME_WEBOS_NDK/arm-webos-linux-gnueabi/sysroot/usr/lib/libfreetype.so.6" "$stage/lib/"

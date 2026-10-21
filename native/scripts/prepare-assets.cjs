@@ -16,7 +16,7 @@ for (const name of ['config.js', 'presentation.js', 'layout.js']) {
 }
 let data;
 if (preview) {
-  data = {apps: ctx.window.Presentation.brands.map(b => ({id:'preview.'+b.key,title:b.name})), inputs:[]};
+  data = {apps: ctx.window.Presentation.brands.map(b => ({id:'preview.'+b.key,title:b.name})), inputs: [1,2,3,4].map(n => ({appId:'preview.hdmi'+n,label:'HDMI '+n}))};
 } else {
   const source = path.join(catalogDir, 'apps.js');
   if (!fs.existsSync(source)) throw new Error('TV catalog missing. Run tvhome --tv NAME sync from the repository root, then package again. See docs/DEVELOPMENT.md.');

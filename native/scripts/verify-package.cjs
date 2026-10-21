@@ -58,6 +58,8 @@ function verify(data, control, template = false) {
     assert.deepEqual(icon.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
     assert.equal(icon.readUInt32BE(16), size); assert.equal(icon.readUInt32BE(20), size);
   }
+  const state = data.find(e => e.name.endsWith('/com.anant.tvhome.native/state/'));
+  assert.ok(state && (state.mode & 0o777) === 0o777, 'App state directory must be writable by the jailed app');
   const catalog = JSON.parse(read('assets/catalog.json'));
   assert.equal(catalog.preview, false);
   if (template) {

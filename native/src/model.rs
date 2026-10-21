@@ -10,13 +10,17 @@ pub const LEFT: f32 = 100.0;
 pub const PAD: f32 = 35.2;
 pub const PANEL_ROW_TOP: f32 = 260.0;
 pub const PANEL_ROW_STEP: f32 = 88.0;
+pub const PIN_LEFT: f32 = 1720.0;
 /// The Wi-Fi target mirrors the clock height and aligns with the tray's left edge.
 pub fn wifi_bounds() -> (f32, f32, f32, f32) {
     (LEFT - PAD, 62.0, 72.0, 72.0)
 }
 
-pub fn wifi_close_bounds() -> (f32, f32, f32, f32) {
-    (LEFT - PAD + 24.0, 620.0, 632.0, 76.0)
+pub fn wifi_action_bounds(index: usize) -> (f32, f32, f32, f32) {
+    (LEFT - PAD + 24.0, 620.0 + index as f32 * 88.0, 632.0, 76.0)
+}
+pub fn speed_action_bounds(index: usize) -> (f32, f32, f32, f32) {
+    (LEFT - PAD + 24.0, 652.0 + index as f32 * 88.0, 852.0, 76.0)
 }
 
 /// Left, top, width and height; the status pill shares the tray's right edge.
@@ -35,6 +39,8 @@ pub struct App {
     pub color: [u8; 3],
     #[serde(default)]
     pub background: Option<[u8; 3]>,
+    #[serde(skip)]
+    pub input: bool,
 }
 
 #[derive(Deserialize, Clone)]
@@ -44,7 +50,7 @@ pub struct Input {
     pub label: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Catalog {
     pub preview: bool,
     pub apps: Vec<App>,
@@ -52,6 +58,17 @@ pub struct Catalog {
 }
 
 impl Catalog {
+    pub fn input_items(&self) -> Vec<Input> {
+        let mut inputs = self.inputs.clone();
+        if !inputs.iter().any(|i| i.app_id == "com.webos.app.livetv") {
+            inputs.push(Input {
+                app_id: "com.webos.app.livetv".into(),
+                label: "Live TV".into(),
+            });
+        }
+        inputs
+    }
+
     pub fn validate(&self, preview: bool) -> Result<()> {
         if self.apps.is_empty() {
             bail!("Home's app list is empty. Install a package prepared for this TV.");
@@ -208,6 +225,7 @@ mod tests {
                 contain: false,
                 color: [0, 0, 0],
                 background: None,
+                input: false,
             }],
             inputs: vec![],
         };

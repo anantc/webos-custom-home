@@ -7,12 +7,12 @@ function fixture() {
   const elf = Buffer.alloc(40); Buffer.from([127,69,76,70,1,1]).copy(elf); elf.writeUInt16LE(40,18); elf.writeUInt32LE(0x200,36);
   const files = {
     'appinfo.json': JSON.stringify({id:'com.anant.tvhome.native',type:'native',icon:'icon.png',largeIcon:'large.png',iconColor:'#000000'}),
-    'icon.png':png(80),'large.png':png(130),
+    'icon.png':png(80),'large.png':png(130),'state/':'',
     'assets/catalog.json':JSON.stringify({preview:false,apps:[{id:'native.netflix'}]}),
     'bin/tvhome-native':elf,'lib/libSDL3.so.0':'\x7fELF','lib/libfreetype.so.6':'\x7fELF',
     'licenses/SDL3-LICENSE.txt':'license','assets/Inter-OFL.txt':'font license',
   };
-  return {data:Object.entries(files).map(([name,value])=>({name:'package/'+name,mode:name.startsWith('bin/')?0o755:0o644,content:Buffer.from(value)})),control:[{name:'./control',content:Buffer.from('Architecture: arm\n')}]};
+  return {data:Object.entries(files).map(([name,value])=>({name:'usr/palm/applications/com.anant.tvhome.native/'+name,mode:name.endsWith('/')?0o777:name.startsWith('bin/')?0o755:0o644,content:Buffer.from(value)})),control:[{name:'./control',content:Buffer.from('Architecture: arm\n')}]};
 }
 test('package accepts real ARM soft-float app with required icons and notices', () => {
   const {data,control}=fixture();assert.deepEqual(verify(data,control),{id:'com.anant.tvhome.native',apps:1});
@@ -21,6 +21,8 @@ test('package rejects preview IDs, missing permissions, wrong ABI and missing li
   for(const change of [
     data=>{data.find(e=>e.name.endsWith('catalog.json')).content=Buffer.from(JSON.stringify({preview:true,apps:[{id:'preview.netflix'}]}));},
     data=>{data.find(e=>e.name.endsWith('bin/tvhome-native')).mode=0o644;},
+    data=>{data.find(e=>e.name.endsWith('state/')).mode=0o755;},
+    data=>{data.splice(data.findIndex(e=>e.name.endsWith('state/')),1);},
     data=>{data.find(e=>e.name.endsWith('bin/tvhome-native')).content.writeUInt32LE(0x400,36);},
     data=>{data.splice(data.findIndex(e=>e.name.endsWith('Inter-OFL.txt')),1);},
   ]) {const {data,control}=fixture();change(data);assert.throws(()=>verify(data,control));}

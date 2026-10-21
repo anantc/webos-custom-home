@@ -17,6 +17,15 @@ SDL's webOS Back and Exit policy hints must be set before creating the window.
 The system Home key remains available to webOS. Held Exit is read through SDL's
 webOS-specific scancode.
 
+## Idle screensaver
+
+After creating its window, Home calls SDL's `enable_screen_saver` to release
+SDL's default screensaver inhibition. webOS owns the idle timer and screensaver;
+Home does not synthesize input or force a screensaver app to launch. Startup logs
+record whether SDL accepted the request. That confirms SDL's state, not firmware
+support: verify that LG's screensaver appears after idle and dismisses normally
+on the actual TV.
+
 ## Audio
 
 Navigation audio is a generated 40 ms click, cached once and played asynchronously
@@ -60,6 +69,27 @@ Only a complete valid update is applied. Selection follows the same app ID,
 or clamps to a remaining app if that app was removed; input-menu selection is
 also clamped. Invalid updates retain the last working catalog.
 
+## Pinned inputs
+
+Input pins are saved in `state/preferences.json` inside the installed app.
+The package includes a writable `state/` directory because webOS launches
+native apps as an unprivileged user. The tvhome installer must retain directory
+entries and their permissions when it personalizes the IPK. The native app
+writes a temporary file, flushes it and renames it on a worker thread; the UI commits the toggle after a successful write.
+Failures leave the previous pins visible and show an error. These settings are
+separate from the tvhome-published `assets/catalog.json`.
+
+The displayed catalog overlays pinned inputs on the latest source catalog,
+using input app IDs as stable identities. Pins follow their saved order after
+apps, without duplicating existing tiles. Input names track the current catalog;
+absent inputs retain their saved pin and reappear when available again. Launches
+use the same Luna application launch path as the Inputs menu.
+
+Preview includes four example HDMI inputs and saves pins separately in
+`native/state/preview-preferences.json`. Test Right/Left between label and pin,
+OK and pointer toggles, tile launch logging, restart persistence, catalog reloads
+and failed saves. TV filesystem permissions still require a hardware check.
+
 ## Wi-Fi service
 
 A worker queries `com.webos.service.wifi/getstatus` with
@@ -83,6 +113,43 @@ temporarily add `export TVHOME_PREVIEW_WIFI_UNAVAILABLE=1` just before the app
 launch in `native/scripts/preview.sh`, then restart `./native/dev.sh preview`.
 This sets the variable inside the container where the app runs. Remove the line
 and restart to return to the normal fixture.
+
+## Speed test
+
+The Wi-Fi panel opens a native test screen. Only Run speed test starts network
+traffic. A worker owns a current-thread Tokio runtime and reqwest with Rustls
+and bundled certificate roots; the SDL/render thread only reads snapshots.
+
+Discovery reads Fast.com's current app script and token, then calls its v2
+server-discovery endpoint. Tokens and signed target URLs stay in memory. Only
+HTTPS Netflix CDN range URLs are accepted, redirects are disabled, and discovery
+responses are size-limited. This is an undocumented protocol: changes fail with
+an error rather than falling back to fixed URLs or stale results.
+
+After warming TLS, latency is the median of three empty POST round trips.
+Four parallel connections download for ten seconds, then upload for ten seconds.
+Download counts received chunks; upload counts only successful, acknowledged
+requests, including the time to finish in-flight uploads. Upload requests adapt
+towards 250 ms, capped at 4 MiB, sharing one buffer. Responses are discarded.
+These are Home's measurements using Fast.com infrastructure, not a reproduction
+of the website's adaptive algorithm. Latency is HTTP round-trip time, not ICMP
+ping or loaded latency. TLS and CPU limits can affect results on TV hardware.
+
+Discovery, latency and upload requests have eight-second total timeouts. Download
+requests override that limit so their bodies can keep streaming for the full
+ten-second measurement; its deadline cancels unfinished responses normally.
+The complete test has a 65-second deadline. Errors identify timeouts, connection
+failures and HTTP status codes without displaying signed server URLs. Cancel,
+Back, focus loss and exit drop pending requests and worker tasks. Updates use a
+single latest-snapshot slot so the render thread cannot accumulate a backlog.
+Completed results are atomically saved to `state/speedtest-result.json` inside
+the installed app; errors and cancellation preserve the previous completed result.
+
+The emulator uses real internet transfers through the computer running Docker,
+labelled **Emulator connection**, independently of its example Wi-Fi readings.
+It saves to `native/state/preview-speedtest-result.json`. Check start, progress,
+cancel/Back, failure, retry and result persistence in preview; check throughput
+and TLS compatibility separately on hardware before treating it as calibrated.
 
 ## Rendering and webOS integration
 
