@@ -18,16 +18,16 @@ home directory. Choose a local name for each TV, such as `living-room` or
 choose. The executable contains the Home TV package and license notices.
 
 Download the **executable and its checksum** from the same row below into your
-Downloads folder. These links are for tvhome 0.1.0. Choose your computer's platform;
+Downloads folder. These links are for tvhome 0.1.1. Choose your computer's platform;
 on a Mac, **About This Mac** shows an Apple chip or Intel processor. On Linux,
 `uname -m` reports `aarch64` for ARM64 or `x86_64` for x64.
 
 | Computer | Executable | Checksum | Requirements |
 | --- | --- | --- | --- |
-| Apple Silicon Mac | [tvhome-darwin-arm64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.0/tvhome-darwin-arm64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.0/tvhome-darwin-arm64.sha256) | macOS 13+ |
-| Intel Mac | [tvhome-darwin-x64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.0/tvhome-darwin-x64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.0/tvhome-darwin-x64.sha256) | macOS 13+ |
-| ARM64 Linux | [tvhome-linux-arm64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.0/tvhome-linux-arm64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.0/tvhome-linux-arm64.sha256) | glibc 2.35+; systemd for background jobs |
-| x64 Linux | [tvhome-linux-x64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.0/tvhome-linux-x64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.0/tvhome-linux-x64.sha256) | glibc 2.35+; systemd for background jobs |
+| Apple Silicon Mac | [tvhome-darwin-arm64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-darwin-arm64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-darwin-arm64.sha256) | macOS 13+ |
+| Intel Mac | [tvhome-darwin-x64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-darwin-x64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-darwin-x64.sha256) | macOS 13+ |
+| ARM64 Linux | [tvhome-linux-arm64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-linux-arm64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-linux-arm64.sha256) | glibc 2.35+; systemd for background jobs |
+| x64 Linux | [tvhome-linux-x64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-linux-x64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-linux-x64.sha256) | glibc 2.35+; systemd for background jobs |
 
 ### Verify and install
 
@@ -89,7 +89,7 @@ Open a **new terminal** so the shell loads the updated command path, then run:
 tvhome --version
 ```
 
-It should report `tvhome 0.1.0`. In the current terminal, or with another shell,
+It should report `tvhome 0.1.1`. In the current terminal, or with another shell,
 use `~/.local/bin/tvhome` in place of `tvhome` in subsequent commands.
 The downloaded file can be deleted after installation.
 
@@ -191,8 +191,8 @@ If you choose alerts, the setup prompt guides you through these steps:
    integration can be disabled for an individual check; confirm the routing on
    each check's page. See [Healthchecks notification setup](https://healthchecks.io/docs/configuring_notifications/).
 5. Copy each check's base ping URL, such as `https://hc-ping.com/…`, into the
-   corresponding prompt. URLs are hidden while entered and stored privately in
-   the TV profile. Use a different check for every job and TV.
+   corresponding prompt and press Enter. You can see the URL as you type or paste
+   it. Use a different check for every job and TV.
 
 Names and slugs identify checks in Healthchecks; tvhome uses their full ping URLs
 to route updates. Tags are optional labels.

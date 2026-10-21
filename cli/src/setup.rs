@@ -201,6 +201,40 @@ pub async fn remove(config: &Config) -> Result<()> {
     .await
     .map_err(|_| fault("TV removal task failed."))?
 }
+fn prompt_ping_url(
+    config: &Config,
+    key: &str,
+    label: &str,
+    mut ask: impl FnMut(&str) -> Result<String>,
+) -> Result<String> {
+    let saved = config
+        .ping_url(key, false)
+        .ok()
+        .filter(|url| !url.is_empty());
+    let message = if saved.is_some() {
+        format!("{label} base ping URL (Enter keeps the saved URL): ")
+    } else {
+        format!("{label} base ping URL (https://hc-ping.com/...): ")
+    };
+    let mut candidate = config.clone();
+    loop {
+        let input = ask(&message)?;
+        let url = input.trim();
+        if url.is_empty() {
+            if let Some(saved) = &saved {
+                return Ok(saved.clone());
+            }
+            println!("Paste this check's ping URL and press Enter.");
+            continue;
+        }
+        candidate.values.insert(key.into(), url.into());
+        match candidate.ping_url(key, true) {
+            Ok(url) => return Ok(url),
+            Err(_) => println!("Enter the complete base URL from Healthchecks.io, starting with https://hc-ping.com/ and without a /start or /fail suffix."),
+        }
+    }
+}
+
 pub async fn background(tv: &str) -> Result<()> {
     let mut config = Config::load(tv, false)?;
     println!("Background features are optional. This computer must stay awake to run them.");
@@ -249,17 +283,8 @@ pub async fn background(tv: &str) -> Result<()> {
         (renew, "HC_RENEWAL_URL", "Renewal"),
     ] {
         if enabled && monitoring_ready {
-            let message = if config.get(key).is_some() {
-                format!("{label} base ping URL (Enter keeps the saved URL): ")
-            } else {
-                format!("{label} base ping URL (https://hc-ping.com/...): ")
-            };
-            let url = rpassword::prompt_password(message)
-                .map_err(|_| fault("Cannot read Healthchecks URL."))?;
-            if !url.trim().is_empty() {
-                config.values.insert(key.into(), url.trim().into());
-            }
-            config.ping_url(key, true)?;
+            let url = prompt_ping_url(&config, key, label, prompt)?;
+            config.values.insert(key.into(), url);
         } else {
             config.values.remove(key);
         }
@@ -284,6 +309,52 @@ pub async fn background(tv: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ping_url_prompt_retries_empty_and_invalid_input() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::common::test_config(dir.path());
+        let valid = "https://hc-ping.com/00000000-0000-0000-0000-000000000000";
+        let inputs = [
+            "".to_owned(),
+            "not a URL".to_owned(),
+            format!("{valid}/fail"),
+            format!("  {valid}/  "),
+        ];
+        let mut inputs = inputs.into_iter();
+        let mut attempts = 0;
+        let result = prompt_ping_url(&config, "HC_WATCHER_URL", "Watcher", |message| {
+            assert!(message.starts_with("Watcher base ping URL"));
+            attempts += 1;
+            Ok(inputs.next().expect("unexpected extra prompt"))
+        })
+        .unwrap();
+        assert_eq!(result, valid);
+        assert_eq!(attempts, 4);
+        assert!(config.get("HC_WATCHER_URL").is_none());
+    }
+    #[test]
+    fn ping_url_prompt_keeps_saved_value_on_enter() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = crate::common::test_config(dir.path());
+        let saved = "https://hc-ping.com/00000000-0000-0000-0000-000000000000";
+        config.values.insert("HC_RENEWAL_URL".into(), saved.into());
+        let result = prompt_ping_url(&config, "HC_RENEWAL_URL", "Renewal", |message| {
+            assert!(message.contains("Enter keeps the saved URL"));
+            Ok(String::new())
+        })
+        .unwrap();
+        assert_eq!(result, saved);
+    }
+    #[test]
+    fn ping_url_prompt_stops_when_input_closes() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = crate::common::test_config(dir.path());
+        let error = fault("Setup needs an interactive terminal.");
+        assert_eq!(
+            prompt_ping_url(&config, "HC_WATCHER_URL", "Watcher", |_| Err(error.clone())),
+            Err(error)
+        );
+    }
     #[test]
     fn encrypted_developer_key_is_decrypted_without_saving_passphrase() {
         let rsa = openssl::rsa::Rsa::generate(2048).unwrap();
