@@ -238,6 +238,13 @@ Answer the Home watching, renewal and Healthchecks questions. Pressing Enter at
 each yes/no question chooses **No**. Setup validates the selected features and
 starts only those jobs. If you skip both jobs, it makes no changes.
 
+On macOS, allow **tvhome** to access devices on your local network when prompted.
+The background watcher needs this permission to reach your TV. If you dismissed
+the prompt, enable tvhome in **System Settings → Privacy & Security → Local
+Network**. macOS may ask again after a tvhome update. A successful connection from
+Terminal or SSH does not establish permission for the background job: macOS
+handles those command-line connections differently from LaunchAgents.
+
 **Check:** if watching is enabled, press Home on the TV and confirm redirection.
 Return to LG Home within three seconds to leave LG Home open. If renewal is
 enabled, setup prints the remaining session hours confirmed by LG. If monitoring

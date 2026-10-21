@@ -113,6 +113,12 @@ stalled for five minutes, also fails the check.
 Thus the watcher check measures tvhome health, not TV uptime. It cannot
 distinguish standby from an incorrect address by reachability alone.
 
+If a Mac watcher reports the TV unavailable while the TV is on and direct
+commands can connect, check **System Settings → Privacy & Security → Local
+Network** and allow tvhome. Background LaunchAgents need their own permission;
+Terminal and SSH connections are automatically allowed. An update may require
+a new approval. See [Apple’s local network privacy guidance](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy).
+
 ## Connections and credentials
 
 | Connection | Credential | Purpose |
