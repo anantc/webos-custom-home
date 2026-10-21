@@ -97,13 +97,18 @@ or raw TV responses.
 
 ## What monitoring means
 
-When its Healthchecks URL is configured, the watcher sends a heartbeat every minute. An unreachable TV is treated as
-standby and retried. Where the TV exposes power state, catalog checks also skip
-confirmed standby or screen-off states. Rejected requests, missing Home, unconfirmed launches and
-failed catalog publishing report failure. A prior failure stays failed during
-standby until a successful retry. Foreground progress does not hide a catalog
-failure. Foreground inactivity beyond two minutes or a catalog operation stalled
-for five minutes also fails the check.
+When its Healthchecks URL is configured, the watcher sends a heartbeat every
+minute. An unreachable TV is treated as standby and retried. This includes a TV
+that stops answering transport pings without closing its connection when switched
+off. Where the TV exposes power state, catalog checks also skip confirmed standby
+or screen-off states.
+
+Rejected requests, missing Home, unconfirmed launches and failed catalog publishing
+report failure. A prior request or publishing failure stays failed during standby
+until a successful retry. Watcher failure pings include the specific request error;
+progress stalls are reported separately. Foreground progress does not hide a
+catalog failure. No watcher progress for two minutes, or a catalog operation
+stalled for five minutes, also fails the check.
 
 Thus the watcher check measures tvhome health, not TV uptime. It cannot
 distinguish standby from an incorrect address by reachability alone.

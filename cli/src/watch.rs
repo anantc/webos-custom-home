@@ -44,31 +44,34 @@ impl Redirect {
 }
 struct State {
     phase: &'static str,
-    fault: bool,
+    failure: Option<&'static str>,
     progress: Instant,
 }
 impl State {
     fn new() -> Self {
         Self {
             phase: "starting",
-            fault: false,
+            failure: None,
             progress: Instant::now(),
         }
     }
-    fn update(&mut self, phase: &'static str, fault: bool) {
-        if self.phase != phase || self.fault != fault {
+    fn update(&mut self, phase: &'static str, failure: Option<&'static str>) {
+        if self.phase != phase || self.failure != failure {
             crate::log(&format!("Watcher: {phase}"));
         }
         self.phase = phase;
-        self.fault = fault;
+        self.failure = failure;
         self.progress = Instant::now();
     }
     fn heartbeat(&self, now: Instant) -> (&'static str, &'static str) {
-        if self.fault || now.duration_since(self.progress) > Duration::from_secs(120) {
+        if now.duration_since(self.progress) > Duration::from_secs(120) {
             return (
                 "/fail",
-                "Watcher fault or stalled progress. Check host logs.",
+                "Watcher made no progress for over two minutes. Check host logs.",
             );
+        }
+        if let Some(reason) = self.failure {
+            return ("/fail", reason);
         }
         if self.phase == "watching" {
             ("", "Watcher subscribed and transport responsive.")
@@ -165,7 +168,9 @@ async fn watch_peer<S: AsyncRead + AsyncWrite + Unpin>(
             ));
         }
         if pong_deadline.is_some_and(|d| now >= d) {
-            return Err(fault("TV did not respond to the transport ping."));
+            crate::log(&timing.event("event=transport_timeout waiting_ms=10000"));
+            // A TV entering standby may leave the socket open without answering pings.
+            return Err(Error::Unavailable);
         }
         if now >= ping_at {
             ping_sent = Some(Instant::now());
@@ -220,7 +225,7 @@ async fn watch_peer<S: AsyncRead + AsyncWrite + Unpin>(
                         "event=subscribed elapsed_ms={}",
                         received.duration_since(subscribe_started).as_millis()
                     )));
-                    state.lock().unwrap().update("watching", false);
+                    state.lock().unwrap().update("watching", None);
                 }
                 if message["id"] == "launch" && was_pending {
                     if let Some(line) = timing.acknowledged(received) {
@@ -281,18 +286,20 @@ async fn watch_loop(
         match result {
             Err(Error::Unavailable) => {
                 let mut s = state.lock().unwrap();
-                let fault = s.fault;
-                s.update("TV unavailable", fault);
+                let failure = s.failure;
+                s.update("TV unavailable", failure);
             }
             Err(e) => {
                 crate::log(&e.to_string());
-                state.lock().unwrap().update("TV request failed", true);
-                http.ping(
-                    url,
-                    "/fail",
-                    "TV rejected or did not confirm a watcher request.",
-                )
-                .await;
+                let reason = match e {
+                    Error::Fault(reason) => reason,
+                    _ => "Watcher request failed. Check host logs.",
+                };
+                state
+                    .lock()
+                    .unwrap()
+                    .update("TV request failed", Some(reason));
+                http.ping(url, "/fail", reason).await;
             }
             Ok(()) => {}
         }
@@ -410,6 +417,38 @@ mod tests {
         assert!(state.failed(state.progress + Duration::from_secs(301)));
     }
     #[tokio::test(start_paused = true)]
+    async fn silent_standby_after_subscription_does_not_fail_healthcheck() {
+        let (mut client, mut server) = tv::mock_pair().await;
+        let config = crate::common::test_config(std::path::Path::new("/tmp"));
+        let state = Arc::new(Mutex::new(State::new()));
+        let mut timing = Timing::new(1);
+        let simulation = tokio::spawn(async move {
+            server
+                .next(Instant::now() + Duration::from_secs(1))
+                .await
+                .unwrap();
+            server.send(json!({"id":"apps","payload":{"launchPoints":[{"id":"com.anant.tvhome.native"}]}})).await.unwrap();
+            server
+                .next(Instant::now() + Duration::from_secs(1))
+                .await
+                .unwrap();
+            server
+                .send(json!({"id":"fg","payload":{"appId":"netflix"}}))
+                .await
+                .unwrap();
+            // Keep the connection open but stop reading/responding, as standby did on the TV.
+            std::future::pending::<()>().await;
+        });
+        let started = Instant::now();
+        let result = watch_peer(&mut client, &config, &state, &mut timing).await;
+        simulation.abort();
+        assert_eq!(result, Err(Error::Unavailable));
+        assert_eq!(started.elapsed(), Duration::from_secs(30));
+        let state = state.lock().unwrap();
+        assert_eq!(state.phase, "watching");
+        assert_eq!(state.heartbeat(Instant::now()).0, "");
+    }
+    #[tokio::test(start_paused = true)]
     async fn missing_launch_ack_times_out_after_foreground_switch() {
         let (mut client, mut server) = tv::mock_pair().await;
         let c = crate::common::test_config(std::path::Path::new("/tmp"));
@@ -522,15 +561,18 @@ mod tests {
     #[test]
     fn heartbeat_distinguishes_standby_failure_and_stall() {
         let mut s = State::new();
-        s.update("TV unavailable", false);
+        s.update("TV unavailable", None);
         assert_eq!(s.heartbeat(Instant::now()).0, "");
         assert_eq!(
             s.heartbeat(s.progress + Duration::from_secs(121)).0,
             "/fail"
         );
-        s.fault = true;
-        assert_eq!(s.heartbeat(Instant::now()).0, "/fail");
-        s.update("watching", false);
+        let reason = "Configured Home launcher is not installed.";
+        s.update("TV request failed", Some(reason));
+        assert_eq!(s.heartbeat(Instant::now()), ("/fail", reason));
+        s.update("TV unavailable", s.failure);
+        assert_eq!(s.heartbeat(Instant::now()), ("/fail", reason));
+        s.update("watching", None);
         assert_eq!(s.heartbeat(Instant::now()).0, "");
     }
     #[test]
