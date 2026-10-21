@@ -140,6 +140,9 @@ pub fn scroll_for(index: usize, count: usize, current: f32) -> f32 {
     if index < COLS {
         return 0.0;
     }
+    // A catalog can shrink while focus is below the first row. Drop obsolete scroll space.
+    let maximum = (position(count.saturating_sub(1), count).1 + CARD_H + 70.0 - 1025.0).max(0.0);
+    let current = current.clamp(0.0, maximum);
     let y = position(index, count).1;
     let top = if index < COLS {
         y - PAD - 12.0
@@ -153,6 +156,48 @@ pub fn scroll_for(index: usize, count: usize, current: f32) -> f32 {
         bottom - 1025.0
     } else {
         current
+    }
+}
+
+/// A tile keeps its current position when a new destination interrupts a slide.
+#[derive(Clone, Copy)]
+pub struct TileMotion {
+    pub from: (f32, f32),
+    pub to: (f32, f32),
+    pub start: std::time::Instant,
+}
+impl TileMotion {
+    const DURATION: std::time::Duration = std::time::Duration::from_millis(180);
+
+    pub fn new(position: (f32, f32)) -> Self {
+        Self {
+            from: position,
+            to: position,
+            start: std::time::Instant::now(),
+        }
+    }
+    pub fn value_at(&self, now: std::time::Instant) -> (f32, f32) {
+        let t = (now.saturating_duration_since(self.start).as_secs_f32()
+            / Self::DURATION.as_secs_f32())
+        .min(1.0);
+        if t >= 1.0 {
+            return self.to;
+        }
+        let eased = 1.0 - (1.0 - t).powi(3);
+        (
+            self.from.0 + (self.to.0 - self.from.0) * eased,
+            self.from.1 + (self.to.1 - self.from.1) * eased,
+        )
+    }
+    pub fn retarget(&mut self, position: (f32, f32), now: std::time::Instant) {
+        if self.to != position {
+            self.from = self.value_at(now);
+            self.to = position;
+            self.start = now;
+        }
+    }
+    pub fn active(&self) -> bool {
+        self.from != self.to && self.start.elapsed() < Self::DURATION
     }
 }
 
@@ -191,6 +236,27 @@ impl Tween {
 mod tests {
     use super::*;
     #[test]
+    fn tile_slide_retargets_without_jumping_or_restarting_unchanged_destinations() {
+        use std::time::{Duration, Instant};
+        let now = Instant::now();
+        let mut tile = TileMotion::new((100.0, 300.0));
+        tile.retarget((394.0, 574.0), now);
+        assert_eq!(tile.value_at(now), (100.0, 300.0));
+        let halfway = now + Duration::from_millis(90);
+        let current = tile.value_at(halfway);
+        assert!(current.0 > 100.0 && current.0 < 394.0);
+        assert!(current.1 > 300.0 && current.1 < 574.0);
+        tile.retarget(tile.to, halfway);
+        assert_eq!(tile.start, now);
+        assert_eq!(tile.value_at(halfway), current);
+        tile.retarget((688.0, 300.0), halfway);
+        assert_eq!(tile.value_at(halfway), current);
+        assert_eq!(
+            tile.value_at(halfway + Duration::from_millis(180)),
+            (688.0, 300.0)
+        );
+    }
+    #[test]
     fn ragged_rows_and_edges() {
         assert_eq!(next(5, Direction::Down, 8), Some(7));
         assert_eq!(next(7, Direction::Right, 8), Some(7));
@@ -213,6 +279,8 @@ mod tests {
         assert_eq!(position(24, 25).1 - scroll + CARD_H + 70.0, 1025.0);
         assert_eq!(scroll_for(0, 25, scroll), 0.0);
         assert_eq!(scroll_for(7, 8, 0.0), 0.0);
+        assert_eq!(scroll_for(9, 10, scroll), 0.0);
+        assert_eq!(scroll_for(17, 18, scroll), 0.0);
     }
     #[test]
     fn reject_preview_catalog_on_tv() {

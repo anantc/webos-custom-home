@@ -1,6 +1,6 @@
 [package]
 name = "tvhome-native"
-version = "0.1.0"
+version = "0.1.4"
 edition = "2021"
 license = "MIT"
 description = "Native Rust/SDL3/Skia Home screen for LG webOS"

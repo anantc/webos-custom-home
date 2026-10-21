@@ -9,10 +9,12 @@ use std::{
 };
 
 #[derive(Clone, Default, Deserialize, Serialize, Debug, PartialEq)]
-pub struct Pins {
+pub struct Preferences {
     pub pinned_inputs: Vec<String>,
+    #[serde(default)]
+    pub tile_order: Vec<String>,
 }
-impl Pins {
+impl Preferences {
     pub fn contains(&self, id: &str) -> bool {
         self.pinned_inputs.iter().any(|p| p == id)
     }
@@ -20,20 +22,53 @@ impl Pins {
         let mut next = self.clone();
         if next.contains(id) {
             next.pinned_inputs.retain(|p| p != id);
+            next.tile_order.retain(|p| p != id);
         } else {
             next.pinned_inputs.push(id.into());
         }
         next
     }
+    pub fn with_order(&self, visible: &[String]) -> Self {
+        let mut next = self.clone();
+        // Keep slots for absent apps/inputs, while replacing visible slots in the new order.
+        let visible_ids: std::collections::HashSet<_> = visible.iter().collect();
+        let mut remaining = visible.iter();
+        next.tile_order = self
+            .tile_order
+            .iter()
+            .filter_map(|id| {
+                if visible_ids.contains(id) {
+                    remaining.next().cloned()
+                } else {
+                    Some(id.clone())
+                }
+            })
+            .collect();
+        next.tile_order.extend(remaining.cloned());
+        // Bound history while always retaining every currently visible tile.
+        let mut excess = next.tile_order.len().saturating_sub(1024);
+        next.tile_order.retain(|id| {
+            if excess > 0 && !visible_ids.contains(id) {
+                excess -= 1;
+                false
+            } else {
+                true
+            }
+        });
+        next
+    }
     fn validate(&self) -> Result<()> {
         ensure!(self.pinned_inputs.len() <= 65, "Too many pinned inputs");
-        let mut seen = std::collections::HashSet::new();
-        for id in &self.pinned_inputs {
-            ensure!(
-                !id.is_empty() && id.len() <= 512 && !id.chars().any(char::is_control),
-                "Invalid pinned input ID"
-            );
-            ensure!(seen.insert(id), "Duplicate pinned input ID");
+        ensure!(self.tile_order.len() <= 1024, "Too many saved tiles");
+        for ids in [&self.pinned_inputs, &self.tile_order] {
+            let mut seen = std::collections::HashSet::new();
+            for id in ids {
+                ensure!(
+                    !id.is_empty() && id.len() <= 512 && !id.chars().any(char::is_control),
+                    "Invalid tile ID"
+                );
+                ensure!(seen.insert(id), "Duplicate tile ID");
+            }
         }
         Ok(())
     }
@@ -46,8 +81,8 @@ impl Pins {
             Err(error) => return Err(error.into()),
         };
         let mut bytes = Vec::new();
-        file.take(65537).read_to_end(&mut bytes)?;
-        ensure!(bytes.len() <= 65536, "Pinned input settings are too large");
+        file.take(1024 * 1024 + 1).read_to_end(&mut bytes)?;
+        ensure!(bytes.len() <= 1024 * 1024, "Home preferences are too large");
         let pins: Self = serde_json::from_slice(&bytes)?;
         pins.validate()?;
         Ok(pins)
@@ -61,9 +96,9 @@ impl Pins {
             let mut file =
                 fs::File::create(&temp).with_context(|| format!("Create {}", temp.display()))?;
             file.write_all(&serde_json::to_vec_pretty(self)?)
-                .context("Write pinned inputs")?;
-            file.sync_all().context("Flush pinned inputs")?;
-            fs::rename(&temp, path).context("Replace pinned inputs")?;
+                .context("Write Home preferences")?;
+            file.sync_all().context("Flush Home preferences")?;
+            fs::rename(&temp, path).context("Replace Home preferences")?;
             Ok(())
         })();
         if result.is_err() {
@@ -91,8 +126,25 @@ impl Pins {
                 });
             }
         }
+        apply_order(&mut result, &self.tile_order);
         result
     }
+}
+
+pub fn tile_ids(catalog: &Catalog) -> Vec<String> {
+    catalog.apps.iter().map(|app| app.id.clone()).collect()
+}
+
+pub fn apply_order(catalog: &mut Catalog, order: &[String]) {
+    let ranks: std::collections::HashMap<_, _> = order
+        .iter()
+        .enumerate()
+        .map(|(i, id)| (id.as_str(), i))
+        .collect();
+    // Stable sorting leaves newly discovered tiles in catalog order at the end.
+    catalog
+        .apps
+        .sort_by_key(|app| ranks.get(app.id.as_str()).copied().unwrap_or(usize::MAX));
 }
 
 pub fn save_error(error: &anyhow::Error) -> String {
@@ -101,22 +153,24 @@ pub fn save_error(error: &anyhow::Error) -> String {
         .find_map(|cause| cause.downcast_ref::<std::io::Error>());
     match reason.map(std::io::Error::kind) {
         Some(std::io::ErrorKind::PermissionDenied) => {
-            "Could not save pins: storage permission denied.".into()
+            "Could not save changes: storage permission denied.".into()
         }
         Some(std::io::ErrorKind::ReadOnlyFilesystem) => {
-            "Could not save pins: storage is read-only.".into()
+            "Could not save changes: storage is read-only.".into()
         }
-        Some(std::io::ErrorKind::StorageFull) => "Could not save pins: TV storage is full.".into(),
-        _ => "Could not save pinned inputs. Try again.".into(),
+        Some(std::io::ErrorKind::StorageFull) => {
+            "Could not save changes: TV storage is full.".into()
+        }
+        _ => "Could not save changes. Try again.".into(),
     }
 }
 
 pub struct Writer {
-    pub requests: mpsc::SyncSender<Pins>,
-    pub results: mpsc::Receiver<Result<Pins>>,
+    pub requests: mpsc::SyncSender<Preferences>,
+    pub results: mpsc::Receiver<Result<Preferences>>,
 }
 pub fn writer(path: PathBuf) -> Writer {
-    let (requests, queue) = mpsc::sync_channel::<Pins>(1);
+    let (requests, queue) = mpsc::sync_channel::<Preferences>(1);
     let (tx, results) = mpsc::channel();
     std::thread::spawn(move || {
         for pins in queue {
@@ -138,9 +192,78 @@ mod tests {
         ],"inputs":[{"appId":"preview.hdmi1","label":"HDMI 1"}]}))
         .unwrap()
     }
+    fn ids(values: &[&str]) -> Vec<String> {
+        values.iter().map(|id| (*id).into()).collect()
+    }
+    #[test]
+    fn saved_order_mixes_apps_and_inputs_and_survives_catalog_changes() {
+        let mut source = source();
+        let mut second = source.apps[0].clone();
+        second.id = "second".into();
+        source.apps.push(second);
+        let prefs = Preferences::default()
+            .toggled("preview.hdmi1")
+            .with_order(&ids(&["second", "preview.hdmi1", "preview.app"]));
+        assert_eq!(
+            tile_ids(&prefs.catalog(&source)),
+            ids(&["second", "preview.hdmi1", "preview.app"])
+        );
+        source.apps.reverse();
+        source.inputs[0].label = "Console".into();
+        let mut added = source.apps[0].clone();
+        added.id = "new".into();
+        source.apps.insert(0, added);
+        let updated = prefs.catalog(&source);
+        assert_eq!(
+            tile_ids(&updated),
+            ids(&["second", "preview.hdmi1", "preview.app", "new"])
+        );
+        assert_eq!(updated.apps[1].title, "Console");
+        let input = source.inputs.remove(0);
+        source.apps.retain(|app| app.id != "second");
+        assert_eq!(
+            tile_ids(&prefs.catalog(&source)),
+            ids(&["preview.app", "new"])
+        );
+        let changed = prefs.with_order(&ids(&["new", "preview.app"]));
+        source.inputs.push(input);
+        assert_eq!(
+            tile_ids(&changed.catalog(&source)),
+            ids(&["preview.hdmi1", "new", "preview.app"])
+        );
+        let unpinned = prefs.toggled("preview.hdmi1");
+        assert!(!unpinned.tile_order.contains(&"preview.hdmi1".into()));
+        assert_eq!(
+            tile_ids(&unpinned.toggled("preview.hdmi1").catalog(&source)),
+            ids(&["preview.app", "new", "preview.hdmi1"])
+        );
+    }
+    #[test]
+    fn preferences_are_per_tv_and_older_pin_files_remain_readable() {
+        let old: Preferences =
+            serde_json::from_str(r#"{"pinned_inputs":["preview.hdmi1"]}"#).unwrap();
+        assert!(old.tile_order.is_empty());
+        let root = std::env::temp_dir().join(format!("tvhome-order-{}", std::process::id()));
+        let office = root.join("office/preferences.json");
+        let guest = root.join("guest/preferences.json");
+        let order = old.with_order(&ids(&["preview.hdmi1", "preview.app"]));
+        order.save(&office).unwrap();
+        old.save(&guest).unwrap();
+        assert_eq!(Preferences::load(&office).unwrap(), order);
+        assert_eq!(Preferences::load(&guest).unwrap(), old);
+        let mut invalid = order.clone();
+        invalid.tile_order.push("preview.app".into());
+        assert!(invalid.save(&office).is_err());
+        assert_eq!(Preferences::load(&office).unwrap(), order);
+        // A real filesystem failure must not replace the saved preference file.
+        fs::create_dir(office.with_extension("json.tmp")).unwrap();
+        assert!(old.save(&office).is_err());
+        assert_eq!(Preferences::load(&office).unwrap(), order);
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn refreshed_catalog_keeps_pins_updates_labels_and_does_not_duplicate_apps() {
-        let pins = Pins::default().toggled("preview.hdmi1");
+        let pins = Preferences::default().toggled("preview.hdmi1");
         let mut source = source();
         assert_eq!(pins.catalog(&source).apps[1].title, "HDMI 1");
         source.inputs[0].label = "Console".into();
@@ -156,7 +279,7 @@ mod tests {
     }
     #[test]
     fn live_tv_can_be_pinned_and_order_follows_pin_order() {
-        let pins = Pins::default()
+        let pins = Preferences::default()
             .toggled("com.webos.app.livetv")
             .toggled("preview.hdmi1");
         let result = pins.catalog(&source());
@@ -174,17 +297,18 @@ mod tests {
                 .as_nanos()
         ));
         let path = root.join("preferences.json");
-        let pins = Pins::default().toggled("preview.hdmi1");
-        assert_eq!(Pins::load(&path).unwrap(), Pins::default());
+        let pins = Preferences::default().toggled("preview.hdmi1");
+        assert_eq!(Preferences::load(&path).unwrap(), Preferences::default());
         pins.save(&path).unwrap();
-        assert_eq!(Pins::load(&path).unwrap(), pins);
-        let invalid = Pins {
+        assert_eq!(Preferences::load(&path).unwrap(), pins);
+        let invalid = Preferences {
             pinned_inputs: vec!["duplicate".into(), "duplicate".into()],
+            ..Default::default()
         };
         assert!(invalid.save(&path).is_err());
-        assert_eq!(Pins::load(&path).unwrap(), pins);
+        assert_eq!(Preferences::load(&path).unwrap(), pins);
         fs::write(&path, b"{truncated").unwrap();
-        assert!(Pins::load(&path).is_err());
+        assert!(Preferences::load(&path).is_err());
         fs::remove_dir_all(root).unwrap();
     }
 }

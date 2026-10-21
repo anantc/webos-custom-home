@@ -53,9 +53,9 @@ if [ "$action" = template ]; then
 fi
 ares-package "$stage" -o "$output"
 if [ "$action" = template ]; then
-  node scripts/verify-package.cjs "$output/com.anant.tvhome.native_0.1.0_arm.ipk" --template
+  node scripts/verify-package.cjs "$output/com.anant.tvhome.native_0.1.4_arm.ipk" --template
 else
-  node scripts/verify-package.cjs "$output/com.anant.tvhome.native_0.1.0_arm.ipk"
+  node scripts/verify-package.cjs "$output/com.anant.tvhome.native_0.1.4_arm.ipk"
   cp "../catalog/tvs/$tv_name/tv.json" "$output/tv.json"
 fi
 echo "Package ready in tv/$output."

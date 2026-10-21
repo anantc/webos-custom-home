@@ -7,6 +7,33 @@ pub struct Update {
     pub catalog: Catalog,
     pub icons: Vec<Option<Image>>,
 }
+/// Artwork follows stable app IDs, including when an input is inserted among apps.
+pub fn icons_for<T: Clone>(
+    source: &Catalog,
+    icons: &[Option<T>],
+    displayed: &Catalog,
+) -> Vec<Option<T>> {
+    let by_id: std::collections::HashMap<_, _> = source
+        .apps
+        .iter()
+        .enumerate()
+        .map(|(i, app)| (app.id.as_str(), i))
+        .collect();
+    displayed
+        .apps
+        .iter()
+        .map(|app| {
+            if app.input {
+                return None;
+            }
+            by_id
+                .get(app.id.as_str())
+                .and_then(|i| icons.get(*i))
+                .cloned()
+                .flatten()
+        })
+        .collect()
+}
 pub struct Worker {
     pub requests: mpsc::SyncSender<()>,
     pub results: mpsc::Receiver<Update>,
@@ -73,6 +100,28 @@ pub fn worker(assets: PathBuf, preview: bool, initial: Vec<u8>) -> Worker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn artwork_tracks_ids_after_moving_pins_and_refreshing_the_source() {
+        let mut source: Catalog = serde_json::from_slice(&data("a", "a.png")).unwrap();
+        let mut b = source.apps[0].clone();
+        b.id = "b".into();
+        source.apps.push(b);
+        let mut displayed = source.clone();
+        displayed.apps.reverse();
+        let mut pin = source.apps[0].clone();
+        pin.id = "hdmi".into();
+        pin.input = true;
+        displayed.apps.insert(1, pin);
+        assert_eq!(
+            icons_for(&source, &[Some("a icon"), Some("b icon")], &displayed),
+            vec![Some("b icon"), None, Some("a icon")]
+        );
+        source.apps.reverse();
+        assert_eq!(
+            icons_for(&source, &[Some("updated b"), Some("updated a")], &displayed),
+            vec![Some("updated b"), None, Some("updated a")]
+        );
+    }
     fn data(id: &str, artwork: &str) -> Vec<u8> {
         serde_json::to_vec(&serde_json::json!({"preview":false,"apps":[{
             "id":id,"title":"App","artwork":artwork,"contain":true,"color":[0,0,0]

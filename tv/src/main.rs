@@ -38,7 +38,27 @@ enum Header {
 enum Action {
     Launch(String, String),
     TogglePin(String),
+    SaveOrder(Vec<String>),
     SpeedTest,
+}
+const MOVE_HOLD: Duration = Duration::from_millis(700);
+#[derive(Clone, Copy, PartialEq)]
+enum ConfirmButton {
+    Key,
+    Pointer,
+}
+struct ConfirmPress {
+    button: ConfirmButton,
+    target: Option<FocusTarget>,
+    app_id: Option<String>,
+    at: Instant,
+    consumed: bool,
+}
+struct TileMove {
+    started: Instant,
+    id: String,
+    order: Vec<String>,
+    saving: bool,
 }
 struct Ui {
     selected: usize,
@@ -48,9 +68,13 @@ struct Ui {
     pin_focused: bool,
     scroll: Tween,
     scales: Vec<Tween>,
+    positions: Vec<TileMotion>,
     toast: Option<(String, Instant)>,
     metrics: bool,
     quit: bool,
+    confirm: Option<ConfirmPress>,
+    moving: Option<TileMove>,
+    order_changed: bool,
 }
 impl Ui {
     fn new(count: usize) -> Self {
@@ -64,30 +88,73 @@ impl Ui {
             pin_focused: false,
             scroll: Tween::new(0.0),
             scales,
+            positions: (0..count)
+                .map(|i| TileMotion::new(position(i, count)))
+                .collect(),
             toast: None,
             metrics: false,
             quit: false,
+            confirm: None,
+            moving: None,
+            order_changed: false,
         }
     }
     fn reconcile(&mut self, previous: &Catalog, updated: &Catalog) {
+        if self
+            .moving
+            .as_ref()
+            .is_some_and(|m| !m.saving && !updated.apps.iter().any(|a| a.id == m.id))
+        {
+            self.cancel_move();
+            self.toast = Some(("That tile is no longer available.".into(), Instant::now()));
+        }
         let id = previous.apps.get(self.selected).map(|app| app.id.as_str());
         self.selected = updated
             .apps
             .iter()
             .position(|app| Some(app.id.as_str()) == id)
             .unwrap_or_else(|| self.selected.min(updated.apps.len() - 1));
-        self.scales = (0..updated.apps.len())
-            .map(|i| {
-                Tween::new(
-                    if i == self.selected && self.header.is_none() && self.panel.is_none() {
-                        1.14
-                    } else {
-                        1.0
-                    },
-                )
+        let now = Instant::now();
+        let previous_indices: std::collections::HashMap<_, _> = previous
+            .apps
+            .iter()
+            .enumerate()
+            .map(|(i, app)| (app.id.as_str(), i))
+            .collect();
+        self.positions = updated
+            .apps
+            .iter()
+            .enumerate()
+            .map(|(i, app)| {
+                let destination = position(i, updated.apps.len());
+                let mut motion = previous_indices
+                    .get(app.id.as_str())
+                    .map(|old| self.positions[*old])
+                    .unwrap_or_else(|| TileMotion::new(destination));
+                motion.retarget(destination, now);
+                motion
             })
             .collect();
-        self.scroll = Tween::new(scroll_for(
+        self.scales = updated
+            .apps
+            .iter()
+            .enumerate()
+            .map(|(i, app)| {
+                let target = if i == self.selected && self.header.is_none() && self.panel.is_none()
+                {
+                    1.14
+                } else {
+                    1.0
+                };
+                let mut scale = previous_indices
+                    .get(app.id.as_str())
+                    .map(|old| self.scales[*old])
+                    .unwrap_or_else(|| Tween::new(target));
+                scale.set(target);
+                scale
+            })
+            .collect();
+        self.scroll.set(scroll_for(
             self.selected,
             updated.apps.len(),
             self.scroll.to,
@@ -126,6 +193,21 @@ impl Ui {
         self.scroll.set(scroll_for(index, count, self.scroll.to));
     }
     fn direction(&mut self, direction: Direction, catalog: &Catalog) {
+        if let Some(moving) = &mut self.moving {
+            if !moving.saving {
+                let destination =
+                    next(self.selected, direction, catalog.apps.len()).unwrap_or(self.selected);
+                if destination != self.selected {
+                    let mut order = preferences::tile_ids(catalog);
+                    let id = order.remove(self.selected);
+                    order.insert(destination, id);
+                    moving.order = order;
+                    self.order_changed = true;
+                }
+            }
+            return;
+        }
+        self.confirm = None;
         if self.panel.is_some() {
             let count = self.items(catalog).len();
             match direction {
@@ -156,6 +238,11 @@ impl Ui {
         }
     }
     fn back(&mut self) {
+        self.confirm = None;
+        if self.moving.is_some() {
+            self.cancel_move();
+            return;
+        }
         self.pin_focused = false;
         if self.panel == Some(Panel::SpeedTest) {
             self.panel = Some(Panel::Wifi);
@@ -175,6 +262,9 @@ impl Ui {
         }
     }
     fn activate(&mut self, catalog: &Catalog) -> Option<Action> {
+        if let Some(moving) = &self.moving {
+            return (!moving.saving).then(|| Action::SaveOrder(preferences::tile_ids(catalog)));
+        }
         if self.panel == Some(Panel::SpeedTest) {
             if self.panel_index == 0 {
                 return Some(Action::SpeedTest);
@@ -228,6 +318,12 @@ impl Ui {
         None
     }
     fn pointer(&mut self, x: f32, y: f32, catalog: &Catalog) -> bool {
+        if self.moving.is_some() {
+            // Pointer movement must not drop or change the tile being moved with the arrows.
+            let (left, top) = self.positions[self.selected].value_at(Instant::now());
+            return (left..left + CARD_W).contains(&x)
+                && (top - self.scroll.value()..top - self.scroll.value() + CARD_H).contains(&y);
+        }
         if matches!(self.panel, Some(Panel::Wifi | Panel::SpeedTest)) {
             for i in 0..2 {
                 let (left, top, width, height) = if self.panel == Some(Panel::Wifi) {
@@ -267,7 +363,7 @@ impl Ui {
             }
         }
         for i in 0..catalog.apps.len() {
-            let (cx, cy) = position(i, catalog.apps.len());
+            let (cx, cy) = self.positions[i].value_at(Instant::now());
             let cy = cy - self.scroll.value();
             if (cx..cx + CARD_W).contains(&x) && (cy..cy + CARD_H).contains(&y) {
                 self.select(i, catalog.apps.len());
@@ -276,6 +372,130 @@ impl Ui {
         }
         false
     }
+
+    fn confirm_down(&mut self, button: ConfirmButton, now: Instant, catalog: &Catalog) {
+        if self.confirm.is_none() {
+            self.confirm = Some(ConfirmPress {
+                button,
+                target: self.focus_target(),
+                app_id: (self.panel.is_none() && self.header.is_none())
+                    .then(|| catalog.apps[self.selected].id.clone()),
+                at: now,
+                consumed: false,
+            });
+        }
+    }
+    fn same_press_target(&self, press: &ConfirmPress, catalog: &Catalog) -> bool {
+        if let Some(id) = &press.app_id {
+            self.panel.is_none() && self.header.is_none() && catalog.apps[self.selected].id == *id
+        } else {
+            self.focus_target() == press.target
+        }
+    }
+    fn hold_tick(&mut self, now: Instant, catalog: &Catalog, writable: bool) -> bool {
+        let Some(press) = &self.confirm else {
+            return false;
+        };
+        if !writable
+            || self.moving.is_some()
+            || press.consumed
+            || press.app_id.is_none()
+            || now.saturating_duration_since(press.at) < MOVE_HOLD
+            || !self.same_press_target(press, catalog)
+        {
+            return false;
+        }
+        self.moving = Some(TileMove {
+            started: now,
+            id: catalog.apps[self.selected].id.clone(),
+            order: preferences::tile_ids(catalog),
+            saving: false,
+        });
+        self.confirm.as_mut().unwrap().consumed = true;
+        self.toast = None;
+        true
+    }
+    fn confirm_up(
+        &mut self,
+        button: ConfirmButton,
+        now: Instant,
+        catalog: &Catalog,
+        writable: bool,
+    ) -> Option<Action> {
+        if self
+            .confirm
+            .as_ref()
+            .is_none_or(|press| press.button != button)
+        {
+            return None;
+        }
+        self.hold_tick(now, catalog, writable);
+        let press = self.confirm.take()?;
+        if press.consumed
+            || !self.same_press_target(&press, catalog)
+            || (!writable
+                && press.app_id.is_some()
+                && now.saturating_duration_since(press.at) >= MOVE_HOLD)
+        {
+            return None;
+        }
+        self.activate(catalog)
+    }
+    fn cancel_move(&mut self) {
+        self.confirm = None;
+        if self.moving.as_ref().is_some_and(|m| !m.saving) {
+            self.moving = None;
+            self.order_changed = true;
+        }
+    }
+    fn save_finished(&mut self, success: bool) {
+        if let Some(moving) = &mut self.moving {
+            if success {
+                self.moving = None;
+                self.order_changed = true;
+                self.confirm = None;
+            } else {
+                moving.saving = false;
+            }
+        }
+    }
+    fn displayed_catalog(&self, prefs: &preferences::Preferences, source: &Catalog) -> Catalog {
+        let mut catalog = prefs.catalog(source);
+        if let Some(moving) = &self.moving {
+            preferences::apply_order(&mut catalog, &moving.order);
+        }
+        catalog
+    }
+    fn refresh_catalog(
+        &mut self,
+        catalog: &mut Catalog,
+        prefs: &preferences::Preferences,
+        source: &Catalog,
+    ) {
+        let mut updated = self.displayed_catalog(prefs, source);
+        let was_moving = self.moving.is_some();
+        self.reconcile(catalog, &updated);
+        if was_moving && self.moving.is_none() {
+            // If the picked tile disappeared, discard its draft order as well.
+            let restored = prefs.catalog(source);
+            self.reconcile(&updated, &restored);
+            updated = restored;
+        }
+        *catalog = updated;
+        self.order_changed = false;
+    }
+}
+
+fn refresh_grid(
+    ui: &mut Ui,
+    catalog: &mut Catalog,
+    prefs: &preferences::Preferences,
+    source: &Catalog,
+    renderer: &mut render::Renderer,
+    icons: &[Option<skia_safe::Image>],
+) {
+    ui.refresh_catalog(catalog, prefs, source);
+    renderer.icons = catalog::icons_for(source, icons, catalog);
 }
 
 fn main() -> Result<()> {
@@ -306,9 +526,9 @@ fn main() -> Result<()> {
             .context("app directory")?
             .join("state/preferences.json")
     };
-    let mut pins = preferences::Pins::load(&preferences_path).unwrap_or_else(|error| {
-        tracing::warn!(%error, "Could not read pinned inputs");
-        preferences::Pins::default()
+    let mut prefs = preferences::Preferences::load(&preferences_path).unwrap_or_else(|error| {
+        tracing::warn!(%error, "Could not read Home preferences");
+        preferences::Preferences::default()
     });
     let result_path = preferences_path.with_file_name(if preview {
         "preview-speedtest-result.json"
@@ -316,9 +536,9 @@ fn main() -> Result<()> {
         "speedtest-result.json"
     });
     let mut speed_test = speedtest::Monitor::new(result_path, preview);
-    let pin_writer = preferences::writer(preferences_path);
-    let mut pin_pending = false;
-    let mut catalog = pins.catalog(&source_catalog);
+    let preference_writer = preferences::writer(preferences_path);
+    let mut preference_pending = false;
+    let mut catalog = prefs.catalog(&source_catalog);
     let catalog_worker = catalog::worker(assets.clone(), preview, initial_catalog);
     let mut catalog_check = Instant::now();
     let mut renderer = render::Renderer::new(&assets, catalog.apps.len())?;
@@ -372,8 +592,14 @@ fn main() -> Result<()> {
         }
     }
     let mut source_icons = renderer.icons[..source_catalog.apps.len()].to_vec();
+    renderer.icons = catalog::icons_for(&source_catalog, &source_icons, &catalog);
     let warm_items = ui.items(&catalog);
     let scales: Vec<f32> = ui.scales.iter().map(Tween::value).collect();
+    let positions: Vec<_> = ui
+        .positions
+        .iter()
+        .map(|p| p.value_at(Instant::now()))
+        .collect();
     {
         let size = window.size();
         let canvas = graphics.surface(size.0, size.1)?.canvas();
@@ -385,6 +611,7 @@ fn main() -> Result<()> {
                 status: false,
                 scroll: 0.0,
                 scales: &scales,
+                positions: &positions,
                 clock: &clock,
                 date: &date,
                 panel: Some((&warm_items, 0)),
@@ -395,6 +622,8 @@ fn main() -> Result<()> {
                 wifi_details: true,
                 wifi_selection: 0,
                 speed_test: None,
+                move_elapsed: Some(0.08),
+                move_hint: None,
                 toast: Some("Home"),
                 metrics: None,
             },
@@ -441,6 +670,7 @@ fn main() -> Result<()> {
                     }
                     WindowEvent::FocusLost | WindowEvent::Hidden | WindowEvent::Minimized => {
                         focused = false;
+                        ui.cancel_move();
                         speed_test.cancel();
                         sounds.suspend();
                     }
@@ -464,12 +694,24 @@ fn main() -> Result<()> {
                             Some(Keycode::Up) => ui.direction(Direction::Up, &catalog),
                             Some(Keycode::Down) => ui.direction(Direction::Down, &catalog),
                             Some(Keycode::Return | Keycode::KpEnter) if !repeat => {
-                                launch = ui.activate(&catalog)
+                                ui.confirm_down(ConfirmButton::Key, Instant::now(), &catalog);
                             }
                             Some(Keycode::Escape | Keycode::Backspace) if !repeat => ui.back(),
                             _ => interacted = false,
                         }
                     }
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::Return | Keycode::KpEnter),
+                    ..
+                } => {
+                    launch = ui.confirm_up(
+                        ConfirmButton::Key,
+                        Instant::now(),
+                        &catalog,
+                        !preference_pending,
+                    );
+                    interacted = true;
                 }
                 Event::MouseMotion { x, y, .. } => {
                     let (w, h) = window.size();
@@ -483,9 +725,28 @@ fn main() -> Result<()> {
                 } => {
                     let (w, h) = window.size();
                     if ui.pointer(x * 1920.0 / w as f32, y * 1080.0 / h as f32, &catalog) {
-                        launch = ui.activate(&catalog);
+                        ui.confirm_down(ConfirmButton::Pointer, Instant::now(), &catalog);
                         interacted = true;
                     }
+                }
+                Event::MouseButtonUp {
+                    x,
+                    y,
+                    mouse_btn: sdl3::mouse::MouseButton::Left,
+                    ..
+                } => {
+                    let (w, h) = window.size();
+                    if ui.pointer(x * 1920.0 / w as f32, y * 1080.0 / h as f32, &catalog) {
+                        launch = ui.confirm_up(
+                            ConfirmButton::Pointer,
+                            Instant::now(),
+                            &catalog,
+                            !preference_pending,
+                        );
+                    } else {
+                        ui.confirm = None;
+                    }
+                    interacted = true;
                 }
                 Event::MouseWheel { y, .. }
                     if y != 0.0 && wheel_at.elapsed() > Duration::from_millis(100) =>
@@ -502,6 +763,16 @@ fn main() -> Result<()> {
                     interacted = true;
                 }
                 _ => (),
+            }
+            if ui.order_changed {
+                refresh_grid(
+                    &mut ui,
+                    &mut catalog,
+                    &prefs,
+                    &source_catalog,
+                    &mut renderer,
+                    &source_icons,
+                );
             }
             if previous_panel == Some(Panel::SpeedTest) && ui.panel != previous_panel {
                 speed_test.cancel();
@@ -520,13 +791,22 @@ fn main() -> Result<()> {
             if ui.panel == Some(Panel::Wifi) && previous_panel != ui.panel {
                 wifi_monitor.refresh(Instant::now());
             }
-            if let Some(Action::TogglePin(id)) = &launch {
-                if !pin_pending {
-                    if pin_writer.requests.try_send(pins.toggled(id)).is_ok() {
-                        pin_pending = true;
+            let change = match &launch {
+                Some(Action::TogglePin(id)) => Some(prefs.toggled(id)),
+                Some(Action::SaveOrder(order)) => Some(prefs.with_order(order)),
+                _ => None,
+            };
+            if let Some(change) = change {
+                if !preference_pending {
+                    if preference_writer.requests.try_send(change).is_ok() {
+                        preference_pending = true;
+                        ui.toast = None;
+                        if let Some(moving) = &mut ui.moving {
+                            moving.saving = true;
+                        }
                     } else {
                         ui.toast = Some((
-                            "Could not save pinned inputs. Reopen Home.".into(),
+                            "Could not save changes. Reopen Home.".into(),
                             Instant::now(),
                         ));
                     }
@@ -550,6 +830,7 @@ fn main() -> Result<()> {
                 dirty = true;
             }
         }
+        dirty |= ui.hold_tick(Instant::now(), &catalog, focused && !preference_pending);
         dirty |= speed_test.poll();
         let mut refresh_catalog = false;
         for update in catalog_worker.results.try_iter() {
@@ -557,26 +838,31 @@ fn main() -> Result<()> {
             source_icons = update.icons;
             refresh_catalog = true;
         }
-        for result in pin_writer.results.try_iter() {
-            pin_pending = false;
+        for result in preference_writer.results.try_iter() {
+            preference_pending = false;
             match result {
                 Ok(saved) => {
-                    pins = saved;
+                    prefs = saved;
+                    ui.save_finished(true);
                     refresh_catalog = true;
                 }
                 Err(error) => {
-                    tracing::warn!(error = %format!("{error:#}"), "Could not save pinned inputs");
+                    ui.save_finished(false);
+                    tracing::warn!(error = %format!("{error:#}"), "Could not save Home preferences");
                     ui.toast = Some((preferences::save_error(&error), Instant::now()));
                     dirty = true;
                 }
             }
         }
         if refresh_catalog {
-            let updated = pins.catalog(&source_catalog);
-            ui.reconcile(&catalog, &updated);
-            catalog = updated;
-            renderer.icons = source_icons.clone();
-            renderer.icons.resize(catalog.apps.len(), None);
+            refresh_grid(
+                &mut ui,
+                &mut catalog,
+                &prefs,
+                &source_catalog,
+                &mut renderer,
+                &source_icons,
+            );
             dirty = true;
         }
         if focused
@@ -634,7 +920,10 @@ fn main() -> Result<()> {
                 dirty = true;
             }
         }
-        let animating = ui.scroll.active() || ui.scales.iter().any(Tween::active);
+        let animating = ui.moving.is_some()
+            || ui.scroll.active()
+            || ui.scales.iter().any(Tween::active)
+            || ui.positions.iter().any(TileMotion::active);
         if focused && (dirty || animating) {
             let draw_start = Instant::now();
             graphics.make_current(&window)?;
@@ -643,9 +932,14 @@ fn main() -> Result<()> {
             let input_pins: Vec<bool> = catalog
                 .input_items()
                 .iter()
-                .map(|i| pins.contains(&i.app_id))
+                .map(|i| prefs.contains(&i.app_id))
                 .collect();
             let scales: Vec<f32> = ui.scales.iter().map(Tween::value).collect();
+            let positions: Vec<_> = ui
+                .positions
+                .iter()
+                .map(|p| p.value_at(draw_start))
+                .collect();
             renderer.draw(
                 graphics.surface(size.0, size.1)?.canvas(),
                 &render::Frame {
@@ -654,6 +948,7 @@ fn main() -> Result<()> {
                     status: ui.header == Some(Header::Controls),
                     scroll: ui.scroll.value(),
                     scales: &scales,
+                    positions: &positions,
                     clock: &clock,
                     date: &date,
                     panel: ui
@@ -668,6 +963,17 @@ fn main() -> Result<()> {
                     wifi_selection: ui.panel_index,
                     speed_test: (ui.panel == Some(Panel::SpeedTest))
                         .then_some((&speed_test.state, ui.panel_index)),
+                    move_elapsed: ui
+                        .moving
+                        .as_ref()
+                        .map(|m| m.started.elapsed().as_secs_f32()),
+                    move_hint: ui.moving.as_ref().map(|m| {
+                        if m.saving {
+                            "Saving order…"
+                        } else {
+                            "Move with arrows · OK to save · Back to cancel"
+                        }
+                    }),
                     toast: ui.toast.as_ref().map(|(s, _)| s.as_str()),
                     metrics: if ui.metrics { Some(&metric_text) } else { None },
                 },
@@ -723,6 +1029,237 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pick_up(ui: &mut Ui, catalog: &Catalog, button: ConfirmButton) {
+        let now = Instant::now();
+        ui.confirm_down(button, now, catalog);
+        assert!(!ui.hold_tick(now + MOVE_HOLD - Duration::from_millis(1), catalog, true));
+        // Duplicate down events must not reset the long-press timer.
+        ui.confirm_down(button, now + Duration::from_millis(300), catalog);
+        assert!(ui.hold_tick(now + MOVE_HOLD, catalog, true));
+        assert_eq!(ui.confirm_up(button, now + MOVE_HOLD, catalog, true), None);
+        assert!(ui.moving.is_some());
+    }
+
+    #[test]
+    fn taps_launch_once_and_holds_enter_move_mode_without_launching() {
+        let catalog = catalog();
+        for button in [ConfirmButton::Key, ConfirmButton::Pointer] {
+            let mut ui = Ui::new(catalog.apps.len());
+            let now = Instant::now();
+            ui.confirm_down(button, now, &catalog);
+            assert_eq!(
+                ui.confirm_up(button, now + Duration::from_millis(80), &catalog, true),
+                Some(Action::Launch("preview.0".into(), "0".into()))
+            );
+            assert_eq!(ui.confirm_up(button, now, &catalog, true), None);
+            pick_up(&mut ui, &catalog, button);
+            ui.confirm_down(button, now, &catalog);
+            assert_eq!(
+                ui.confirm_up(button, now, &catalog, true),
+                Some(Action::SaveOrder(preferences::tile_ids(&catalog)))
+            );
+        }
+        let mut ui = Ui::new(catalog.apps.len());
+        let now = Instant::now();
+        ui.confirm_down(ConfirmButton::Key, now, &catalog);
+        // A release processed before an idle tick still detects a hold.
+        assert_eq!(
+            ui.confirm_up(ConfirmButton::Key, now + MOVE_HOLD, &catalog, true),
+            None
+        );
+        assert!(ui.moving.is_some());
+    }
+
+    #[test]
+    fn moving_hdmi_across_rows_can_save_cancel_and_retry_failed_writes() {
+        let mut source = catalog();
+        for i in 2..8 {
+            let mut app = source.apps[0].clone();
+            app.id = format!("preview.{i}");
+            source.apps.push(app);
+        }
+        let prefs = preferences::Preferences::default().toggled("preview.hdmi1");
+        let mut display = prefs.catalog(&source);
+        let mut ui = Ui::new(display.apps.len());
+        ui.select(8, display.apps.len());
+        pick_up(&mut ui, &display, ConfirmButton::Key);
+        ui.direction(Direction::Up, &display);
+        ui.refresh_catalog(&mut display, &prefs, &source);
+        assert_eq!(ui.selected, 2);
+        assert!(display.apps[2].input);
+        assert_eq!(display.apps[3].id, "preview.2");
+        ui.direction(Direction::Up, &display); // Top boundary stays in move mode.
+        assert!(ui.header.is_none());
+        assert_eq!(ui.selected, 2);
+        ui.back();
+        ui.refresh_catalog(&mut display, &prefs, &source);
+        assert_eq!(ui.selected, 8);
+        assert_eq!(
+            preferences::tile_ids(&display),
+            preferences::tile_ids(&prefs.catalog(&source))
+        );
+        assert!(!ui.quit);
+        pick_up(&mut ui, &display, ConfirmButton::Key);
+        ui.direction(Direction::Up, &display);
+        ui.refresh_catalog(&mut display, &prefs, &source);
+        let Some(Action::SaveOrder(order)) = ui.activate(&display) else {
+            panic!("save order expected");
+        };
+        ui.moving.as_mut().unwrap().saving = true;
+        ui.direction(Direction::Right, &display);
+        ui.back();
+        assert_eq!(ui.selected, 2);
+        assert!(ui.moving.is_some());
+        ui.save_finished(false);
+        assert_eq!(
+            ui.activate(&display),
+            Some(Action::SaveOrder(order.clone()))
+        );
+        let saved = prefs.with_order(&order);
+        ui.save_finished(true);
+        ui.refresh_catalog(&mut display, &saved, &source);
+        assert!(ui.moving.is_none());
+        assert_eq!(ui.selected, 2);
+        assert_eq!(
+            ui.activate(&display),
+            Some(Action::Launch("preview.hdmi1".into(), "HDMI 1".into()))
+        );
+    }
+
+    #[test]
+    fn tile_positions_follow_ids_during_horizontal_vertical_and_interrupted_moves() {
+        let mut source = catalog();
+        for i in 2..10 {
+            let mut app = source.apps[0].clone();
+            app.id = format!("preview.{i}");
+            source.apps.push(app);
+        }
+        let prefs = preferences::Preferences {
+            pinned_inputs: vec!["preview.hdmi1".into()],
+            tile_order: vec!["preview.hdmi1".into()],
+        };
+        let mut display = prefs.catalog(&source);
+        let mut ui = Ui::new(display.apps.len());
+        pick_up(&mut ui, &display, ConfirmButton::Key);
+        // Issue each next direction before the previous slide has finished.
+        for direction in [
+            Direction::Right,
+            Direction::Down,
+            Direction::Left,
+            Direction::Up,
+        ] {
+            let previous = display.clone();
+            let motions = ui.positions.clone();
+            ui.direction(direction, &display);
+            ui.refresh_catalog(&mut display, &prefs, &source);
+            assert_eq!(display.apps[ui.selected].id, "preview.hdmi1");
+            for (i, app) in display.apps.iter().enumerate() {
+                let old = previous.apps.iter().position(|a| a.id == app.id).unwrap();
+                let slide = ui.positions[i];
+                assert_eq!(slide.to, position(i, display.apps.len()));
+                if motions[old].to != slide.to {
+                    assert_eq!(slide.from, motions[old].value_at(slide.start));
+                } else {
+                    assert_eq!(slide.start, motions[old].start);
+                    assert_eq!(slide.from, motions[old].from);
+                }
+            }
+        }
+        // A refresh that keeps the visible order must not restart a slide.
+        let starts: Vec<_> = ui.positions.iter().map(|m| m.start).collect();
+        source.apps.reverse();
+        ui.refresh_catalog(&mut display, &prefs, &source);
+        assert_eq!(
+            starts,
+            ui.positions.iter().map(|m| m.start).collect::<Vec<_>>()
+        );
+        // Cancellation retargets all tiles to saved positions using the current visual positions.
+        ui.direction(Direction::Down, &display);
+        ui.refresh_catalog(&mut display, &prefs, &source);
+        let previous = display.clone();
+        let motions = ui.positions.clone();
+        ui.back();
+        ui.refresh_catalog(&mut display, &prefs, &source);
+        assert!(ui.moving.is_none());
+        assert_eq!(
+            preferences::tile_ids(&display),
+            preferences::tile_ids(&prefs.catalog(&source))
+        );
+        for (i, app) in display.apps.iter().enumerate() {
+            let old = previous.apps.iter().position(|a| a.id == app.id).unwrap();
+            let slide = ui.positions[i];
+            assert_eq!(slide.to, position(i, display.apps.len()));
+            if motions[old].to != slide.to {
+                assert_eq!(slide.from, motions[old].value_at(slide.start));
+            }
+        }
+    }
+
+    #[test]
+    fn catalog_updates_during_a_move_keep_identity_and_cancel_if_tile_disappears() {
+        let mut source = catalog();
+        let prefs = preferences::Preferences::default();
+        let mut display = prefs.catalog(&source);
+        let mut ui = Ui::new(display.apps.len());
+        pick_up(&mut ui, &display, ConfirmButton::Key);
+        ui.direction(Direction::Right, &display);
+        ui.refresh_catalog(&mut display, &prefs, &source);
+        source.apps.reverse();
+        let mut new = source.apps[0].clone();
+        new.id = "new".into();
+        source.apps.insert(0, new);
+        ui.refresh_catalog(&mut display, &prefs, &source);
+        assert_eq!(display.apps[ui.selected].id, "preview.0");
+        assert_eq!(display.apps.last().unwrap().id, "new");
+        source.apps.retain(|app| app.id != "preview.0");
+        ui.refresh_catalog(&mut display, &prefs, &source);
+        assert!(ui.moving.is_none());
+        assert_eq!(
+            preferences::tile_ids(&display),
+            preferences::tile_ids(&source)
+        );
+    }
+
+    #[test]
+    fn changed_targets_focus_loss_and_pointer_jitter_do_not_launch_or_move_the_wrong_tile() {
+        let source = catalog();
+        let now = Instant::now();
+        let mut ui = Ui::new(source.apps.len());
+        ui.confirm_down(ConfirmButton::Pointer, now, &source);
+        ui.select(1, source.apps.len());
+        assert_eq!(
+            ui.confirm_up(ConfirmButton::Pointer, now, &source, true),
+            None
+        );
+        ui.confirm_down(ConfirmButton::Key, now, &source);
+        ui.cancel_move(); // Focus loss clears pending clicks, even outside move mode.
+        assert_eq!(
+            ui.confirm_up(ConfirmButton::Key, now + MOVE_HOLD, &source, true),
+            None
+        );
+        pick_up(&mut ui, &source, ConfirmButton::Pointer);
+        let (x, y) = position(0, source.apps.len());
+        assert!(!ui.pointer(x + 10.0, y + 10.0, &source));
+        assert_eq!(ui.selected, 1);
+        ui.cancel_move();
+        assert!(ui.moving.is_none());
+        assert!(!ui.quit);
+    }
+
+    #[test]
+    fn a_hold_during_a_pending_save_never_falls_through_to_launch() {
+        let catalog = catalog();
+        let mut ui = Ui::new(catalog.apps.len());
+        let now = Instant::now();
+        ui.confirm_down(ConfirmButton::Key, now, &catalog);
+        assert!(!ui.hold_tick(now + MOVE_HOLD, &catalog, false));
+        assert_eq!(
+            ui.confirm_up(ConfirmButton::Key, now + MOVE_HOLD, &catalog, false),
+            None
+        );
+        assert!(ui.moving.is_none());
+    }
 
     fn catalog() -> Catalog {
         Catalog {
@@ -871,7 +1408,7 @@ mod tests {
     #[test]
     fn pinned_tile_launches_input_and_catalog_refresh_keeps_its_selection() {
         let base = catalog();
-        let pins = preferences::Pins::default().toggled("preview.hdmi1");
+        let pins = preferences::Preferences::default().toggled("preview.hdmi1");
         let catalog = pins.catalog(&base);
         let mut ui = Ui::new(catalog.apps.len());
         ui.select(2, catalog.apps.len());

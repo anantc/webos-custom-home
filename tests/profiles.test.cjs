@@ -44,7 +44,7 @@ test('installer sends only the chosen package and does not install on a target m
   for(const file of ['tv/install.sh','tv/scripts/tv-profile.cjs']) fs.copyFileSync(path.join(root,file),path.join(tmp,file));
   const identity={name,host:'192.0.2.11'};
   for(const dir of ['tv/dist/bedroom','catalog/tvs/bedroom']) fs.writeFileSync(path.join(tmp,dir,'tv.json'),JSON.stringify(identity));
-  fs.writeFileSync(path.join(tmp,'tv/dist/bedroom/com.anant.tvhome.native_0.1.0_arm.ipk'),'fixture');
+  fs.writeFileSync(path.join(tmp,'tv/dist/bedroom/com.anant.tvhome.native_0.1.4_arm.ipk'),'fixture');
   const devices=path.join(tmp,'devices.json'), log=path.join(tmp,'commands.jsonl');
   for(const action of ['setup-device','install','launch']) {
     const code=action==='setup-device'
@@ -57,7 +57,7 @@ test('installer sends only the chosen package and does not install on a target m
   fs.writeFileSync(devices,JSON.stringify([d]));
   execFileSync('bash',[path.join(tmp,'tv/install.sh'),name],{env,stdio:'pipe'});
   const calls=fs.readFileSync(log,'utf8');
-  assert.ok(calls.includes('dist/bedroom/com.anant.tvhome.native_0.1.0_arm.ipk'));
+  assert.ok(calls.includes('dist/bedroom/com.anant.tvhome.native_0.1.4_arm.ipk'));
   assert.ok(calls.includes('"-d","bedroom"'));
   fs.unlinkSync(log);
   fs.writeFileSync(devices,JSON.stringify([{...d,deviceinfo:{...d.deviceinfo,ip:'192.0.2.10'}}]));

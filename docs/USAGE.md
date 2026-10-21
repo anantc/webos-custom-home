@@ -15,6 +15,20 @@ The settings menu offers **Inputs**, **TV settings** and **Exit**. Back closes a
 panel; from Inputs, it returns to the settings menu. Back on the app grid or
 holding Back exits Home.
 
+## Reorder tiles
+
+Select an app or pinned input and hold **OK** for about a second. The tiles
+start to jiggle; the selected tile stays enlarged. Release OK, then use the arrows
+to move it. Surrounding tiles slide aside, including when moving between rows.
+Press **OK** again to save, or **Back** to cancel. You can also click and hold
+a tile with the pointer to enter move mode, then use the arrows.
+
+Apps and pinned HDMI or Live TV tiles can go anywhere, including the top tray.
+Each TV saves its own order. It survives Home restarts and app-list updates;
+new apps and newly pinned inputs appear at the end. Temporarily unavailable
+tiles return to their saved positions when available again. Leaving Home during
+an unfinished move cancels it. Removing Home also removes its saved layout.
+
 ## Screensaver
 
 LG controls the screensaver's timing and activation. Home allows LG's screensaver
@@ -31,7 +45,7 @@ With the remote, Right moves from an input name to its pin, Left returns to the
 name, and OK toggles the pin. Up and Down stay in the same column. The pointer
 can click either target directly. Back returns to settings.
 
-Pinned inputs appear after your apps, in the order you pinned them. Each tile
+Newly pinned inputs appear at the end; use move mode to reposition them. Each tile
 shows the TV's input name and switches directly to that input when selected.
 Choices are saved on that TV and survive app restarts and catalog refreshes.
 If an input temporarily disappears from the TV's catalog, its tile returns when
@@ -79,6 +93,6 @@ five seconds while visible, preserving the selected app where possible.
 For a manual check, run `tvhome --tv NAME apps --refresh` on the
 computer running tvhome, replacing `NAME` with the TV profile.
 
-Developer Mode and Home itself are hidden from the grid. Ordering, additional
-exclusions and branding use tvhome's bundled catalog policy; changing
+Developer Mode and Home itself are hidden from the grid. The initial order,
+additional exclusions and branding use tvhome's bundled catalog policy; changing
 that policy is described in the [development guide](DEVELOPMENT.md).

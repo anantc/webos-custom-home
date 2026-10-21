@@ -13,6 +13,7 @@ pub struct Frame<'a> {
     pub status: bool,
     pub scroll: f32,
     pub scales: &'a [f32],
+    pub positions: &'a [(f32, f32)],
     pub clock: &'a str,
     pub date: &'a str,
     pub panel: Option<(&'a [String], usize)>,
@@ -23,6 +24,8 @@ pub struct Frame<'a> {
     pub wifi_details: bool,
     pub wifi_selection: usize,
     pub speed_test: Option<(&'a crate::speedtest::State, usize)>,
+    pub move_elapsed: Option<f32>,
+    pub move_hint: Option<&'a str>,
     pub toast: Option<&'a str>,
     pub metrics: Option<&'a str>,
 }
@@ -413,6 +416,16 @@ impl Renderer {
             // Bound service error text to one line.
             let short: String = toast.chars().take(80).collect();
             self.text(canvas, &short, 960.0, 219.0, 25.0, Color::WHITE, true);
+        } else if let Some(hint) = f.move_hint {
+            self.text(
+                canvas,
+                hint,
+                960.0,
+                197.0,
+                24.0,
+                Color::from_rgb(205, 206, 215),
+                true,
+            );
         }
         if let Some(metrics) = f.metrics {
             self.text(
@@ -735,7 +748,7 @@ impl Renderer {
     }
 
     fn card(&self, canvas: &Canvas, f: &Frame<'_>, i: usize) {
-        let (x, y) = position(i, f.catalog.apps.len());
+        let (x, y) = f.positions[i];
         let y = y - f.scroll;
         if !(-200.0..1100.0).contains(&y) {
             return;
@@ -744,6 +757,19 @@ impl Renderer {
         let w = CARD_W * scale;
         let h = CARD_H * scale;
         let rect = Rect::from_xywh(x - (w - CARD_W) / 2.0, y - (h - CARD_H) / 2.0, w, h);
+        canvas.save();
+        if let Some(elapsed) = f.move_elapsed {
+            // Stable phases keep tiles from rocking in unison or jumping when reordered.
+            let phase = f.catalog.apps[i].id.bytes().fold(0u32, |hash, byte| {
+                hash.wrapping_mul(31).wrapping_add(byte as u32)
+            });
+            let offset = (phase & 255) as f32 / 256.0 * std::f32::consts::TAU;
+            let frequency = 2.6 + ((phase >> 8) & 255) as f32 / 512.0;
+            let angle = (elapsed * std::f32::consts::TAU * frequency + offset).sin()
+                * 1.1
+                * (elapsed / 0.12).min(1.0);
+            canvas.rotate(angle, Some((rect.center_x(), rect.center_y()).into()));
+        }
         if f.catalog.apps[i].input {
             let [r, g, b] = f.catalog.apps[i].color;
             let background = Color::from_rgb(r, g, b);
@@ -839,6 +865,7 @@ impl Renderer {
                 true,
             );
         }
+        canvas.restore();
     }
 }
 

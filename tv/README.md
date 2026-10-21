@@ -13,6 +13,23 @@ padding, and bottom-aligned rows. Focus uses a 1.14 scale and a 100 ms tween.
 The Wi-Fi control aligns with the tray's left edge and the clock/settings control
 with its right edge.
 
+Confirm presses activate on release. Holding OK or the pointer button for 700 ms
+on a tile enters move mode and consumes that release, preventing an accidental
+launch. Arrows insert the selected tile at its new position; OK saves and Back
+discards the draft. Pointer movement does not change the tile being moved.
+Focus loss clears pending confirms and cancels an unsaved move.
+
+Move mode gently rotates tiles around their centers with a 1.1-degree maximum
+and phases derived from their IDs. The selected tile keeps its focus scale.
+Tile positions follow app/input IDs through 180 ms eased slides. Reordering,
+including row crossings, retargets from each tile's current position so rapid
+arrow presses remain continuous. Back slides tiles back into the saved order;
+catalog refreshes and saves preserve any animation already in progress. Scroll
+and focus scale also retain their animations across reorders.
+Only visible tiles are drawn, using the existing cached artwork; continuous
+redrawing ends when move mode and its transitions finish, and drawing pauses
+while unfocused.
+
 SDL's webOS Back and Exit policy hints must be set before creating the window.
 The system Home key remains available to webOS. Held Exit is read through SDL's
 webOS-specific scancode.
@@ -80,21 +97,30 @@ Only a complete valid update is applied. Selection follows the same app ID,
 or clamps to a remaining app if that app was removed; input-menu selection is
 also clamped. Invalid updates retain the last working catalog.
 
-## Pinned inputs
+## Tile preferences
 
-Input pins are saved in `state/preferences.json` inside the installed app.
+Input pins and tile order are saved per TV in `state/preferences.json` inside
+the installed app. Existing pin-only files load with the default catalog order.
 The package includes a writable `state/` directory because webOS launches
 native apps as an unprivileged user. The tvhome installer must retain directory
 entries and their permissions when it personalizes the IPK. The native app
 writes a temporary file, flushes it and renames it on a worker thread; the UI commits the toggle after a successful write.
-Failures leave the previous pins visible and show an error. These settings are
+Pin failures leave the previous pins visible; order-save failures keep move mode
+open for retry or cancellation. These settings are
 separate from the tvhome-published `assets/catalog.json`.
 
 The displayed catalog overlays pinned inputs on the latest source catalog,
-using input app IDs as stable identities. Pins follow their saved order after
-apps, without duplicating existing tiles. Input names track the current catalog;
+using input app IDs as stable identities. Saved tile order is applied after pins,
+so apps and inputs can be mixed. New tiles append in catalog order. Missing IDs
+retain their saved slots; history is bounded to 1024 IDs, preserving visible tiles.
+Unpinning removes that input's order entry. Input names track the current catalog;
 absent inputs retain their saved pin and reappear when available again. Launches
 use the same Luna application launch path as the Inputs menu.
+
+Catalog refreshes merge into an active move draft by ID. Removing the picked tile
+cancels the draft. Artwork is remapped from source IDs after each reorder and
+refresh, rather than relying on catalog indices. Saves run on the same worker as
+pin updates; move controls wait for the write result before allowing another edit.
 
 Preview includes four example HDMI inputs and saves pins separately in
 `tv/state/preview-preferences.json`. Test Right/Left between label and pin,
