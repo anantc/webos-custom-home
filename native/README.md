@@ -17,14 +17,25 @@ SDL's webOS Back and Exit policy hints must be set before creating the window.
 The system Home key remains available to webOS. Held Exit is read through SDL's
 webOS-specific scancode.
 
-## Idle screensaver
+## Screensaver and cursor visibility
 
-After creating its window, Home calls SDL's `enable_screen_saver` to release
-SDL's default screensaver inhibition. webOS owns the idle timer and screensaver;
-Home does not synthesize input or force a screensaver app to launch. Startup logs
-record whether SDL accepted the request. That confirms SDL's state, not firmware
-support: verify that LG's screensaver appears after idle and dismisses normally
-on the actual TV.
+LG owns the idle timer and screensaver activation. After creating its window,
+Home calls SDL's `enable_screen_saver` to release SDL's default inhibition.
+SDL's webOS backend handles LG's screensaver permission requests. Home has no
+custom inactivity timer or activation calls.
+
+LG sends cursor visibility as raw key codes 1198 (show) and 1199 (hide).
+SDL can repeat these notifications without a key-up. Home mirrors their
+visibility into SDL's mouse state: otherwise SDL's Wayland backend requests a
+visible global pointer when mouse focus leaves Home, dismissing LG's screensaver
+during the transition. This behavior was reproduced on webOS 25; synchronizing
+the cursor allowed explicit screensaver activation, normal dismissal and pointer
+use. LG's automatic idle activation was then verified on the same TV with Home's
+custom timer and activation calls removed.
+
+Startup logs record whether SDL accepted the screensaver permission change.
+This confirms SDL's state, not that LG has activated a screensaver. The emulator
+can exercise the UI but cannot validate LG's automatic screensaver behavior.
 
 ## Audio
 

@@ -9,7 +9,7 @@ mod speedtest;
 
 use anyhow::{Context, Result};
 use model::*;
-use platform::wifi;
+use platform::{cursor, wifi};
 use sdl3::event::{Event, WindowEvent};
 use sdl3::keyboard::Keycode;
 use std::path::PathBuf;
@@ -338,7 +338,7 @@ fn main() -> Result<()> {
         .opengl()
         .fullscreen()
         .build()?;
-    // SDL inhibits idle screensavers by default; leave idle policy to webOS.
+    // Release SDL's default inhibition so LG can manage its screensaver.
     match video.enable_screen_saver() {
         Ok(()) => tracing::info!(
             allowed = video.is_screen_saver_enabled(),
@@ -411,6 +411,10 @@ fn main() -> Result<()> {
     while !ui.quit {
         let frame_start = Instant::now();
         for event in events.poll_iter() {
+            if let Some(visible) = cursor::visibility(&event) {
+                // SDL otherwise re-shows the global LG pointer when mouse focus leaves Home.
+                sdl.mouse().show_cursor(visible);
+            }
             let previous_target = ui.focus_target();
             let previous_panel = ui.panel;
             let navigation = matches!(

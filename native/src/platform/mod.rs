@@ -1,3 +1,4 @@
+pub mod cursor;
 mod dl;
 pub mod luna;
 pub mod wifi;

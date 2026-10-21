@@ -15,6 +15,12 @@ The settings menu offers **Inputs**, **TV settings** and **Exit**. Back closes a
 panel; from Inputs, it returns to the settings menu. Back on the app grid or
 holding Back exits Home.
 
+## Screensaver
+
+LG controls the screensaver's timing and activation. Home allows LG's screensaver
+and keeps the pointer hidden when it takes focus. The timeout and availability
+depend on the TV's firmware and settings.
+
 ## Pin inputs to Home
 
 Open **Inputs** from the settings menu. Select an input name to switch to it,
