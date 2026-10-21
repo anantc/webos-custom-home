@@ -16,8 +16,8 @@ const notices = fs.readFileSync(path.resolve(process.env.TVHOME_LICENSES || path
 if (!execFileSync(executable,['--licenses'],{maxBuffer:32*1024*1024}).equals(notices)) throw new Error('Executable does not embed the current notices.');
 const output = path.join(__dirname,'dist'); fs.mkdirSync(output,{recursive:true});
 const binary = fs.readFileSync(executable);
-const templateName = 'com.anant.tvhome.native_'+JSON.parse(fs.readFileSync(path.join(root,'native/packaging/appinfo.json'),'utf8')).version+'_arm.ipk';
-if (!binary.includes(fs.readFileSync(path.join(root,'native/dist/template',templateName)))) throw new Error('Executable does not embed the current Home template. Rebuild with bundled-home.');
+const templateName = 'com.anant.tvhome.native_'+JSON.parse(fs.readFileSync(path.join(root,'tv/packaging/appinfo.json'),'utf8')).version+'_arm.ipk';
+if (!binary.includes(fs.readFileSync(path.join(root,'tv/dist/template',templateName)))) throw new Error('Executable does not embed the current Home template. Rebuild with bundled-home.');
 for (const [file,bytes] of [[name,binary],[`${name}.licenses.txt`,notices]]) {
   fs.writeFileSync(path.join(output,file),bytes,{mode:file===name?0o755:0o644});
   fs.writeFileSync(path.join(output,`${file}.sha256`),`${createHash('sha256').update(bytes).digest('hex')}  ${file}\n`);

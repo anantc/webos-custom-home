@@ -34,7 +34,7 @@ configuration.
 ## Development
 
 [Development](docs/DEVELOPMENT.md) covers source setup, catalogs, builds, tests
-and previews. [Native internals](native/README.md) covers rendering and webOS
+and previews. [TV app internals](tv/README.md) covers rendering and webOS
 integration. [Releases](docs/RELEASES.md) covers publishing downloads.
 
 ## Inspiration and attribution
@@ -43,7 +43,7 @@ integration. [Releases](docs/RELEASES.md) covers publishing downloads.
   inspired the custom Home launcher and Home-button redirection.
 - [punktfunk/client-webos](https://github.com/punktfunk/client-webos) provided
   the native Rust/webOS foundation. Its window integration, compatibility shims
-  and parts of the platform layer are adapted here; see [native/NOTICE](native/NOTICE).
+  and parts of the platform layer are adapted here; see [tv/NOTICE](tv/NOTICE).
 - [webOSbrew](https://www.webosbrew.org/) provides the native toolchain and
   webOS-compatible SDL used to build and run Home.
 
@@ -51,4 +51,4 @@ integration. [Releases](docs/RELEASES.md) covers publishing downloads.
 
 Code is MIT; copyright notices are in [LICENSE](LICENSE). Native dependencies,
 the Inter font and publisher artwork have separate notices. See [NOTICE](NOTICE),
-[native/NOTICE](native/NOTICE) and [asset sources](docs/ASSETS.json).
+[tv/NOTICE](tv/NOTICE) and [asset sources](docs/ASSETS.json).

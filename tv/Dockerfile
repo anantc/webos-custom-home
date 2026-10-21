@@ -17,4 +17,4 @@ RUN npm install -g @webos-tools/cli
 ENV SDL3_PREFIX=/opt/webos/SDL3-webos
 ENV TVHOME_WEBOS_NDK=/opt/webos/arm-webos-linux-gnueabi_sdk-buildroot
 ENV SKIA_BINARIES_URL=https://git.unom.io/unom/skia-binaries/releases/download/0.153.3/skia-binaries-{key}.tar.gz
-WORKDIR /workspace/native
+WORKDIR /workspace/tv

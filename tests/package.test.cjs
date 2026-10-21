@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { gzipSync } = require('node:zlib');
-const { tarEntries, verify } = require('../native/scripts/verify-package.cjs');
+const { tarEntries, verify } = require('../tv/scripts/verify-package.cjs');
 function fixture() {
   const png = size => { const b = Buffer.alloc(24); Buffer.from([137,80,78,71,13,10,26,10]).copy(b); b.writeUInt32BE(size,16); b.writeUInt32BE(size,20); return b; };
   const elf = Buffer.alloc(40); Buffer.from([127,69,76,70,1,1]).copy(elf); elf.writeUInt16LE(40,18); elf.writeUInt32LE(0x200,36);

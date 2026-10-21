@@ -13,11 +13,11 @@ catalog/apps.js
 catalog/icons/
 catalog/tvs/
 
-# Native build products are also covered by native/.gitignore
-native/assets/
-native/target/
-native/.toolchains/
-native/dist/
-native/state/
+# TV build products are also covered by tv/.gitignore
+tv/assets/
+tv/target/
+tv/.toolchains/
+tv/dist/
+tv/state/
 *.log
 .DS_Store

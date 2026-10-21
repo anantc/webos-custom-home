@@ -58,4 +58,4 @@ else
   node scripts/verify-package.cjs "$output/com.anant.tvhome.native_0.1.0_arm.ipk"
   cp "../catalog/tvs/$tv_name/tv.json" "$output/tv.json"
 fi
-echo "Package ready in native/$output."
+echo "Package ready in tv/$output."

@@ -22,7 +22,7 @@ if (require.main === module) {
   try {
     const tvName = name(process.argv[2]);
     const root = path.resolve(__dirname, '../..');
-    const packaged = identity(path.join(root, 'native/dist', tvName, 'tv.json'), tvName);
+    const packaged = identity(path.join(root, 'tv/dist', tvName, 'tv.json'), tvName);
     const synced = identity(path.join(root, 'catalog/tvs', tvName, 'tv.json'), tvName);
     if (packaged.host !== synced.host) throw new Error('TV address changed since packaging. See docs/DEVELOPMENT.md.');
     let devices;

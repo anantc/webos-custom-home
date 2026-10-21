@@ -25,10 +25,10 @@ build can select a newer SDK.
 
 | Path | Responsibility |
 | --- | --- |
-| `native/src/main.rs`, `model.rs` | Input, focus, layout, panels and scheduling |
-| `native/src/catalog.rs` | Validated catalog reloads and background icon decoding |
-| `native/src/render.rs`, `audio.rs`, `gl.rs` | Drawing, sound and GPU context |
-| `native/src/platform/` | webOS services and compatibility layer |
+| `tv/src/main.rs`, `model.rs` | Input, focus, layout, panels and scheduling |
+| `tv/src/catalog.rs` | Validated catalog reloads and background icon decoding |
+| `tv/src/render.rs`, `audio.rs`, `gl.rs` | Drawing, sound and GPU context |
+| `tv/src/platform/` | webOS services and compatibility layer |
 | `cli/src/common.rs` | Named profiles, private files, locks and HTTP |
 | `cli/src/self_install.rs` | Install the computer executable, notices and shell command path |
 | `cli/src/ssh.rs`, `setup.rs` | SSH transport, key retrieval, installation and setup prompts |
@@ -36,23 +36,23 @@ build can select a newer SDK.
 | `cli/src/tv.rs`, `sync.rs`, `inventory.rs` | Pairing, app capture, per-TV inventory and atomic publishing |
 | `cli/src/watch.rs`, `renew.rs`, `install.rs` | Background jobs, health and service installation |
 | `catalog/config.js`, `presentation.js` | App ordering, exclusions and branding |
-| `native/scripts/` | Asset preparation, package checks and preview server |
+| `tv/scripts/` | Asset preparation, package checks and preview server |
 | `tests/` | Downloads, catalogs, target selection, packages and SSH fixtures |
 
 ## Build a setup template
 
 ```sh
-./native/dev.sh template
+./tv/dev.sh template
 ```
 
-This creates a generic IPK and `home-licenses.txt` in `native/dist/template/`.
+This creates a generic IPK and `home-licenses.txt` in `tv/dist/template/`.
 The template has the native executable, font, brand artwork and policy, but no
 TV-specific IDs or credentials. tvhome setup reads the target TV and replaces
 the empty template catalog before installation. The template is not installed
 directly.
 
 Build/preview commands share generated assets and compiler caches.
-`native/dev.sh` serializes them with `native/state/build.lock`. Stop a preview
+`tv/dev.sh` serializes them with `tv/state/build.lock`. Stop a preview
 before building. If interruption leaves the lock directory, confirm its container
 has stopped before removing that empty directory.
 
@@ -74,7 +74,7 @@ On a test TV, follow [TV setup](SETUP.md) using this executable. For a locally
 built template override:
 
 ```sh
-./cli/target/release/tvhome --tv living-room setup --package native/dist/template/com.anant.tvhome.native_0.1.0_arm.ipk
+./cli/target/release/tvhome --tv living-room setup --package tv/dist/template/com.anant.tvhome.native_0.1.0_arm.ipk
 ```
 
 Stop that TV's jobs before rerunning setup. The override affects that installation;
@@ -98,8 +98,8 @@ Use `tvhome --tv living-room apps --refresh` to inspect real installed IDs.
 Developer Mode and Home are always excluded from the launcher grid.
 These settings affect the launcher, not apps installed on the TV.
 
-Artwork in `native/artwork/` overrides matching brand files in `catalog/artwork/`.
-See [native assets](../native/README.md#assets) for provenance and icon editing.
+Artwork in `tv/artwork/` overrides matching brand files in `catalog/artwork/`.
+See [TV app assets](../tv/README.md#assets) for provenance and icon editing.
 
 ### Optional per-TV development package
 
@@ -107,22 +107,22 @@ For inspecting the generated assets of one TV:
 
 ```sh
 tvhome --tv living-room sync
-./native/dev.sh package living-room
+./tv/dev.sh package living-room
 ```
 
 `sync` exports actual launch IDs, inputs and fallback icons into
 `catalog/tvs/living-room/`. Its `tv.json` records the profile name and address.
-The resulting `native/dist/living-room/` package is already personalized.
+The resulting `tv/dist/living-room/` package is already personalized.
 Catalogs and per-TV packages are ignored by Git.
 
-The optional `native/install.sh living-room` helper uses LG's CLI for this
+The optional `tv/install.sh living-room` helper uses LG's CLI for this
 development-only package path. Register its separate CLI target first:
 
 ```sh
 npm install --global @webos-tools/cli
 ares-setup-device --add living-room -i "host=TV_ADDRESS" -i "port=9922" -i "username=prisoner"
 ares-novacom --device living-room --getkey
-./native/install.sh living-room
+./tv/install.sh living-room
 ```
 
 Replace `TV_ADDRESS` with the intended test TV's address. Enable Key Server
@@ -136,7 +136,7 @@ Use tvhome template workflow above for release builds.
 ## Preview
 
 ```sh
-./native/dev.sh preview
+./tv/dev.sh preview
 ```
 
 Open [the local preview](http://127.0.0.1:6081/vnc.html?autoconnect=1&resize=scale).
@@ -144,7 +144,7 @@ It displays example apps on a virtual 1080p screen. Arrows, Return, Escape and
 pointer input work through VNC. Stop with Ctrl+C.
 
 VNC does not carry navigation sound. Software-rendered preview timings do not
-represent TV GPU performance. [Native internals](../native/README.md) describes
+represent TV GPU performance. [TV app internals](../tv/README.md) describes
 instrumentation and Wi-Fi fixtures.
 
 ## Validation
@@ -162,8 +162,8 @@ node --test tests/*.test.cjs
 Native UI, adapters and ARMv7 lint:
 
 ```sh
-./native/dev.sh test
-./native/dev.sh lint
+./tv/dev.sh test
+./tv/dev.sh lint
 ```
 
 The SSH integration fixture starts a local RSA SSH server and exercises actual

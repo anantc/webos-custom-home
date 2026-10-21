@@ -1,5 +1,5 @@
 //! Resolve webOS library symbols at runtime so desktop previews can start without
-//! the TV's vendor libraries. Adapted from Punktfunk; see native/NOTICE.
+//! the TV's vendor libraries. Adapted from Punktfunk; see tv/NOTICE.
 use std::ffi::{c_void, CStr};
 use std::sync::OnceLock;
 

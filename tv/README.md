@@ -1,4 +1,4 @@
-# Native app internals
+# TV app internals
 
 The TV app uses Rust, SDL3 and Skia/OpenGL. Its installed name is **Home** and
 application ID is `com.anant.tvhome.native`.
@@ -53,15 +53,15 @@ The release template bundles the Inter font, brand artwork and catalog policy.
 tvhome setup personalizes it with the target TV's real app and input IDs.
 The optional per-TV developer build uses `catalog/tvs/<name>/apps.js`.
 Publisher artwork in `catalog/artwork/` can be overridden by matching files in
-`native/artwork/`. Edited Apple TV and ZEE5 icons are 512×512.
-Provenance and edit instructions are in `native/artwork/SOURCES.json` and
-`native/artwork/EDIT-PROMPTS.json`.
+`tv/artwork/`. Edited Apple TV and ZEE5 icons are 512×512.
+Provenance and edit instructions are in `tv/artwork/SOURCES.json` and
+`tv/artwork/EDIT-PROMPTS.json`.
 
-The LG Home icon source is `native/packaging/home-icon.svg`. Packaged PNGs are
-`native/packaging/icon-flat.png` (80×80) and
-`native/packaging/largeIcon-flat.png` (130×130). When editing the source, update
+The LG Home icon source is `tv/packaging/home-icon.svg`. Packaged PNGs are
+`tv/packaging/icon-flat.png` (80×80) and
+`tv/packaging/largeIcon-flat.png` (130×130). When editing the source, update
 both PNGs. Their opaque black background matches `iconColor: "#000000"` in
-`native/packaging/appinfo.json`.
+`tv/packaging/appinfo.json`.
 
 Asset preparation applies ordering and exclusions from `catalog/config.js`,
 then removes Home's own app ID. TV package validation rejects preview catalogs
@@ -97,7 +97,7 @@ absent inputs retain their saved pin and reappear when available again. Launches
 use the same Luna application launch path as the Inputs menu.
 
 Preview includes four example HDMI inputs and saves pins separately in
-`native/state/preview-preferences.json`. Test Right/Left between label and pin,
+`tv/state/preview-preferences.json`. Test Right/Left between label and pin,
 OK and pointer toggles, tile launch logging, restart persistence, catalog reloads
 and failed saves. TV filesystem permissions still require a hardware check.
 
@@ -121,7 +121,7 @@ uses different bar thresholds. Signal level does not measure throughput.
 
 Preview uses labelled example data. To exercise the missing-reading state,
 temporarily add `export TVHOME_PREVIEW_WIFI_UNAVAILABLE=1` just before the app
-launch in `native/scripts/preview.sh`, then restart `./native/dev.sh preview`.
+launch in `tv/scripts/preview.sh`, then restart `./tv/dev.sh preview`.
 This sets the variable inside the container where the app runs. Remove the line
 and restart to return to the normal fixture.
 
@@ -158,7 +158,7 @@ the installed app; errors and cancellation preserve the previous completed resul
 
 The emulator uses real internet transfers through the computer running Docker,
 labelled **Emulator connection**, independently of its example Wi-Fi readings.
-It saves to `native/state/preview-speedtest-result.json`. Check start, progress,
+It saves to `tv/state/preview-speedtest-result.json`. Check start, progress,
 cancel/Back, failure, retry and result persistence in preview; check throughput
 and TLS compatibility separately on hardware before treating it as calibrated.
 

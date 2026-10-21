@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const root = path.resolve(__dirname, '../..');
-const out = path.join(root, 'native/assets');
+const out = path.join(root, 'tv/assets');
 const ctx = {window: {}};
 vm.createContext(ctx);
 for (const name of ['config.js', 'presentation.js']) {
@@ -12,7 +12,7 @@ for (const name of ['config.js', 'presentation.js']) {
 fs.rmSync(out, {recursive:true, force:true});
 fs.mkdirSync(out, {recursive:true});
 const brands = ctx.window.Presentation.brands.map(b => {
-  const replacement = ['png','jpg'].map(ext=>path.join(root,'native/artwork',b.key+'.'+ext)).find(fs.existsSync);
+  const replacement = ['png','jpg'].map(ext=>path.join(root,'tv/artwork',b.key+'.'+ext)).find(fs.existsSync);
   const source = replacement || path.join(root,'catalog/artwork',b.key+'.jpg');
   const artwork = 'brand-'+b.key+path.extname(source);
   fs.copyFileSync(source,path.join(out,artwork));

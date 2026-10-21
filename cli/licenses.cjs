@@ -6,7 +6,7 @@ const root = path.resolve(__dirname, '..');
 const target = /^host: (.+)$/m.exec(execFileSync('rustc',['-vV'],{encoding:'utf8'}))[1];
 const metadata = JSON.parse(execFileSync('cargo',['metadata','--locked','--format-version','1','--features','portable,bundled-home','--filter-platform',target],
   {cwd:__dirname, encoding:'utf8',maxBuffer:32*1024*1024}));
-const sections = [fs.readFileSync(path.join(root,'LICENSE'),'utf8'), fs.readFileSync(path.join(root,'native/dist/template/home-licenses.txt'),'utf8')];
+const sections = [fs.readFileSync(path.join(root,'LICENSE'),'utf8'), fs.readFileSync(path.join(root,'tv/dist/template/home-licenses.txt'),'utf8')];
 for (const pkg of metadata.packages) {
   if (pkg.name === 'tvhome') continue;
   const source = path.dirname(pkg.manifest_path);

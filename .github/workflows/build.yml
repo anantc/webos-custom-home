@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - 'cli/**'
-      - 'native/**'
+      - 'tv/**'
       - 'catalog/**'
       - 'tests/**'
       - '.github/workflows/build.yml'
@@ -28,13 +28,13 @@ jobs:
       - name: Test and build the Home payload
         run: |
           node --test tests/*.test.cjs
-          ./native/dev.sh test
-          ./native/dev.sh lint
-          ./native/dev.sh template
+          ./tv/dev.sh test
+          ./tv/dev.sh lint
+          ./tv/dev.sh template
       - uses: actions/upload-artifact@v4
         with:
           name: home-template
-          path: native/dist/template/*
+          path: tv/dist/template/*
           if-no-files-found: error
 
   build:
@@ -64,7 +64,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: home-template
-          path: native/dist/template
+          path: tv/dist/template
       - name: Prepare build tools on the runner
         shell: bash
         run: |

@@ -1,4 +1,4 @@
-// Prepare native assets from the selected local catalog.
+// Prepare TV assets from the selected local catalog.
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -28,7 +28,7 @@ const files = [];
 const apps = ctx.window.HomeLayout.ordered(data.apps,ctx.window.CONFIG,null,ctx.window.Presentation.forApp)
   .filter(a=>a.id!=='com.anant.tvhome.native').map((a,i)=>{
     const b = ctx.window.Presentation.forApp(a);
-    const replacement = b && ['png','jpg'].map(ext => path.join(root,'native/artwork',b.key+'.'+ext)).find(p => fs.existsSync(p));
+    const replacement = b && ['png','jpg'].map(ext => path.join(root,'tv/artwork',b.key+'.'+ext)).find(p => fs.existsSync(p));
     const src = b ? 'artwork/'+b.key+'.jpg' : a.icon;
     let file = '';
     if (replacement || src) {

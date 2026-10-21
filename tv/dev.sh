@@ -20,5 +20,5 @@ run_args=(--rm --platform linux/arm64)
 if [ "$action" = preview ]; then run_args+=(-p 127.0.0.1:6081:6080); fi
 docker run "${run_args[@]}" \
   -v "$repo:/workspace" -v tvhome-native-cargo:/usr/local/cargo/registry \
-  -v tvhome-native-target:/workspace/native/target \
+  -v tvhome-native-target:/workspace/tv/target \
   tvhome-native-builder bash scripts/run.sh "$action" "$tv_name"

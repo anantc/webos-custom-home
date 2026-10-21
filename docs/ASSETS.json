@@ -61,15 +61,15 @@
     "license": "SIL Open Font License 1.1; catalog/fonts/Inter-OFL.txt"
   },
   {
-    "file": "native/packaging/home-icon.svg",
+    "file": "tv/packaging/home-icon.svg",
     "note": "Flat white house on black; MIT, see LICENSE."
   },
   {
-    "file": "native/packaging/icon-flat.png",
+    "file": "tv/packaging/icon-flat.png",
     "note": "80 px rendering of home-icon.svg; MIT."
   },
   {
-    "file": "native/packaging/largeIcon-flat.png",
+    "file": "tv/packaging/largeIcon-flat.png",
     "note": "130 px rendering of home-icon.svg; MIT."
   }
 ]

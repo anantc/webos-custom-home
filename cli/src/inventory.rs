@@ -335,7 +335,7 @@ mod tests {
             files: RefCell::new(std::collections::BTreeMap::from([
                 (
                     format!("{ASSETS}/../appinfo.json"),
-                    include_bytes!("../../native/packaging/appinfo.json").to_vec(),
+                    include_bytes!("../../tv/packaging/appinfo.json").to_vec(),
                 ),
                 (format!("{ASSETS}/catalog.json"), b"catalog".to_vec()),
             ])),
