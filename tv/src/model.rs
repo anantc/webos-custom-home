@@ -8,26 +8,62 @@ pub const STEP_X: f32 = 294.0;
 pub const STEP_Y: f32 = 242.0;
 pub const LEFT: f32 = 100.0;
 pub const PAD: f32 = 35.2;
-pub const PANEL_ROW_TOP: f32 = 260.0;
+pub const HEADER_TOP: f32 = 62.0;
+pub const HEADER_ICON_SIZE: f32 = 32.0;
+pub const HEADER_ICON_GAP: f32 = 40.0;
+pub const HEADER_RIGHT: f32 = LEFT + STEP_X * (COLS - 1) as f32 + CARD_W + PAD;
+pub const HEADER_PANEL_TOP: f32 = HEADER_TOP + 36.0 + HEADER_ICON_SIZE / 2.0;
+pub const SETTINGS_PANEL_LEFT: f32 = HEADER_RIGHT - HEADER_ICON_SIZE - HEADER_ICON_GAP - 600.0;
+pub const WIFI_PANEL_LEFT: f32 = HEADER_RIGHT - 680.0;
+pub const SPEED_PANEL_LEFT: f32 = HEADER_RIGHT - 900.0;
+pub const PANEL_ROW_TOP: f32 = HEADER_PANEL_TOP + 100.0;
 pub const PANEL_ROW_STEP: f32 = 88.0;
-pub const PIN_LEFT: f32 = 1720.0;
-/// The Wi-Fi target mirrors the clock height and aligns with the tray's left edge.
+pub const PIN_LEFT: f32 = SETTINGS_PANEL_LEFT + 500.0;
+pub fn weather_bounds(count: usize) -> (f32, f32, f32, f32) {
+    if count > COLS * 2 {
+        (LEFT, HEADER_TOP, 660.0, 152.0)
+    } else {
+        (LEFT, HEADER_TOP, 660.0, 250.0)
+    }
+}
+pub fn weather_action_bounds(index: usize) -> (f32, f32, f32, f32) {
+    (LEFT + 24.0, 632.0 + index as f32 * 88.0, 800.0, 76.0)
+}
+/// Wi-Fi is the rightmost control, aligned with the tray's right edge.
 pub fn wifi_bounds() -> (f32, f32, f32, f32) {
-    (LEFT - PAD, 62.0, 72.0, 72.0)
+    (
+        HEADER_RIGHT - 36.0 - HEADER_ICON_SIZE / 2.0,
+        HEADER_TOP,
+        72.0,
+        72.0,
+    )
 }
 
 pub fn wifi_action_bounds(index: usize) -> (f32, f32, f32, f32) {
-    (LEFT - PAD + 24.0, 620.0 + index as f32 * 88.0, 632.0, 76.0)
+    (
+        WIFI_PANEL_LEFT + 24.0,
+        HEADER_PANEL_TOP + 460.0 + index as f32 * 88.0,
+        632.0,
+        76.0,
+    )
 }
 pub fn speed_action_bounds(index: usize) -> (f32, f32, f32, f32) {
-    (LEFT - PAD + 24.0, 652.0 + index as f32 * 88.0, 852.0, 76.0)
+    (
+        SPEED_PANEL_LEFT + 24.0,
+        HEADER_PANEL_TOP + 492.0 + index as f32 * 88.0,
+        852.0,
+        76.0,
+    )
 }
 
-/// Left, top, width and height; the status pill shares the tray's right edge.
+/// Settings sits between the clock and Wi-Fi.
 pub fn status_bounds() -> (f32, f32, f32, f32) {
-    let width = 246.0;
-    let tray_right = LEFT + STEP_X * (COLS - 1) as f32 + CARD_W + PAD;
-    (tray_right - width, 62.0, width, 72.0)
+    (
+        wifi_bounds().0 - HEADER_ICON_SIZE - HEADER_ICON_GAP,
+        HEADER_TOP,
+        72.0,
+        72.0,
+    )
 }
 
 #[derive(Deserialize, Clone)]

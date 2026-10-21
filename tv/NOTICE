@@ -23,3 +23,6 @@ FreeType and Skia third-party notices are included when packaging.
 Portions of this software are copyright © 2022 The FreeType Project
 (www.freetype.org). All rights reserved.
 See vendor/third-party and the generated licenses/ directory for notices.
+
+Weather and HDMI symbols are derived from Lucide 1.8.0 (ISC; inherited Feather
+symbols under MIT). https://lucide.dev — see vendor/lucide/LICENSE.

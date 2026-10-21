@@ -10,8 +10,13 @@ test TV and validation. End-user controls are in [Using Home](../docs/USAGE.md).
 
 The UI uses 1920×1080 coordinates, six columns, a first-row tray with 35.2 px
 padding, and bottom-aligned rows. Focus uses a 1.14 scale and a 100 ms tween.
-The Wi-Fi control aligns with the tray's left edge and the clock/settings control
-with its right edge.
+Weather and the time, settings, Wi-Fi group share the top edge. Wi-Fi aligns with
+the tray's right edge. The clock is right-aligned so it keeps the same 40 px gap
+to settings as settings has to Wi-Fi, regardless of the time's width. Both icons
+use 32 px bounds with the same focus scale. Header controls have no background
+containers. Settings and Wi-Fi panels anchor their top-right corner to the
+bottom-right of their icon bounds; Inputs and Speed test keep their parent's
+anchor. Rendering and pointer targets share these positions.
 
 Confirm presses activate on release. Holding OK or the pointer button for 700 ms
 on a tile enters move mode and consumes that release, preventing an accidental
@@ -150,6 +155,65 @@ temporarily add `export TVHOME_PREVIEW_WIFI_UNAVAILABLE=1` just before the app
 launch in `tv/scripts/preview.sh`, then restart `./tv/dev.sh preview`.
 This sets the variable inside the container where the app runs. Remove the line
 and restart to return to the normal fixture.
+
+## Weather and air quality
+
+The open weather layout occupies the space above the tray; it compacts above
+three rows and hides while the app grid is scrolled. Up from the first three
+columns selects weather; columns four/five select settings, and six selects Wi-Fi.
+Left/Right traverse weather, settings and Wi-Fi; Down returns to the grid. The details panel supports
+pointer and remote controls. Weather fetching does not reset LG's idle timer.
+
+`src/weather.rs` owns a background thread and current-thread Tokio runtime.
+IPWhois (`https://ipwho.is/`) supplies city and approximate coordinates from the
+TV's public IP. This stays in memory for six hours. Open-Meteo's forecast and
+air-quality endpoints receive those coordinates in parallel. Requests have a
+five-second connection limit, twelve-second whole-request limit, 256 KiB body
+limit and no redirects; the entire operation has a 25-second deadline.
+
+Only one update runs at a time. Polling starts while Home is foreground, every
+15 minutes, with five-minute retries and a 30-second manual-refresh guard.
+No requests start while Home is backgrounded; an in-flight request can finish.
+Weather and AQI parse independently, so one failed provider need not hide the
+other. Responses require valid timestamps; readings expire after two hours.
+Automatic IP-location results and provider responses stay in memory. A manually
+selected city's name, region, country and coordinates are saved in that TV's
+preferences alongside pins and tile order. Saving must succeed before the
+weather location changes. Switching city clears the previous readings and uses
+a request generation to discard old in-flight responses. Automatic mode removes
+the saved override and resumes IP detection.
+
+`src/city.rs` implements the remote/pointer keyboard and bounded asynchronous
+[Open-Meteo geocoding search](https://open-meteo.com/en/docs/geocoding-api).
+Search runs only when requested, returns up to five cities with state/country,
+and uses the same HTTPS, timeout and response-size limits as weather fetching.
+Editing or leaving search invalidates pending results. Physical keyboards use
+SDL text input only while the picker is open. Search terms and results are not
+persisted; only a selected city is saved. The picker attributes Open-Meteo and
+GeoNames.
+
+Indian AQI is a **model estimate** from CAMS concentrations, not station data.
+The implementation uses PM2.5, PM10, NO₂, SO₂, CO and O₃, applying
+[CPCB's National AQI report, table 3.11 and section 3.5](https://airquality.cpcb.gov.in/ccr_docs/FINAL-REPORT_AQI_.pdf).
+It averages the preceding 24 hourly samples (at least 16 valid) for PM and
+NO₂/SO₂, and eight complete hours for CO/O₃. CO is converted from µg/m³ to mg/m³;
+ozone's upper bands use the one-hour reading. At least three pollutants,
+including PM2.5 or PM10, are required. The largest sub-index wins. Beyond the
+last finite breakpoint it displays 400+ rather than extrapolating the open-ended
+severe category. Lead and ammonia are not supplied for this calculation.
+
+Provider references: [Open-Meteo weather](https://open-meteo.com/en/docs),
+[Open-Meteo/CAMS air quality](https://open-meteo.com/en/docs/air-quality-api),
+[IPWhois](https://ipwhois.io/documentation). The free Open-Meteo endpoint is for
+non-commercial use; commercial distributions need an appropriate provider plan.
+The details screen attributes Open-Meteo and CAMS. HDMI and weather vectors use
+Lucide paths, parsed once at startup; licenses are in `vendor/lucide/`.
+
+Preview uses real providers by default, including the preview host's approximate
+IP location. Set `TVHOME_PREVIEW_WEATHER=sample` or `unavailable` inside the
+preview container to test deterministic states. Sample readings are labelled.
+The ignored `weather::tests::live_providers_return_current_conditions_and_indian_aqi`
+test explicitly exercises live HTTPS; ordinary tests stay offline.
 
 ## Speed test
 

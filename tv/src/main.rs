@@ -1,11 +1,14 @@
 mod audio;
 mod catalog;
+mod city;
 mod gl;
 mod model;
 mod platform;
 mod preferences;
 mod render;
 mod speedtest;
+mod symbols;
+mod weather;
 
 use anyhow::{Context, Result};
 use model::*;
@@ -21,6 +24,8 @@ enum Panel {
     Inputs,
     Wifi,
     SpeedTest,
+    Weather,
+    City,
 }
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum FocusTarget {
@@ -33,6 +38,7 @@ enum FocusTarget {
 enum Header {
     Wifi,
     Controls,
+    Weather,
 }
 #[derive(Debug, PartialEq)]
 enum Action {
@@ -40,6 +46,9 @@ enum Action {
     TogglePin(String),
     SaveOrder(Vec<String>),
     SpeedTest,
+    RefreshWeather,
+    SearchCity(u64, String),
+    ChooseCity(Option<weather::Location>),
 }
 const MOVE_HOLD: Duration = Duration::from_millis(700);
 #[derive(Clone, Copy, PartialEq)]
@@ -75,6 +84,7 @@ struct Ui {
     confirm: Option<ConfirmPress>,
     moving: Option<TileMove>,
     order_changed: bool,
+    city: city::Picker,
 }
 impl Ui {
     fn new(count: usize) -> Self {
@@ -97,6 +107,7 @@ impl Ui {
             confirm: None,
             moving: None,
             order_changed: false,
+            city: city::Picker::default(),
         }
     }
     fn reconcile(&mut self, previous: &Catalog, updated: &Catalog) {
@@ -164,6 +175,12 @@ impl Ui {
             .min(self.items(updated).len().saturating_sub(1));
     }
     fn items(&self, catalog: &Catalog) -> Vec<String> {
+        if self.panel == Some(Panel::City) {
+            return vec![String::new(); city::RESULTS + self.city.results.len()];
+        }
+        if self.panel == Some(Panel::Weather) {
+            return vec!["Change city".into(), "Refresh".into(), "Close".into()];
+        }
         if self.panel == Some(Panel::Wifi) {
             return vec!["Speed test".into(), "Close".into()];
         }
@@ -193,6 +210,11 @@ impl Ui {
         self.scroll.set(scroll_for(index, count, self.scroll.to));
     }
     fn direction(&mut self, direction: Direction, catalog: &Catalog) {
+        if self.panel == Some(Panel::City) {
+            self.confirm = None;
+            self.panel_index = city::navigate(self.panel_index, direction, self.city.results.len());
+            return;
+        }
         if let Some(moving) = &mut self.moving {
             if !moving.saving {
                 let destination =
@@ -223,17 +245,23 @@ impl Ui {
         } else if let Some(header) = self.header {
             match direction {
                 Direction::Down => self.header = None,
-                Direction::Left if header == Header::Controls => self.header = Some(Header::Wifi),
-                Direction::Right if header == Header::Wifi => self.header = Some(Header::Controls),
+                Direction::Left if header == Header::Wifi => self.header = Some(Header::Controls),
+                Direction::Left if header == Header::Controls => {
+                    self.header = Some(Header::Weather)
+                }
+                Direction::Right if header == Header::Weather => {
+                    self.header = Some(Header::Controls)
+                }
+                Direction::Right if header == Header::Controls => self.header = Some(Header::Wifi),
                 _ => (),
             }
         } else if let Some(next) = next(self.selected, direction, catalog.apps.len()) {
             self.select(next, catalog.apps.len());
         } else {
-            self.header = Some(if self.selected % COLS < COLS / 2 {
-                Header::Wifi
-            } else {
-                Header::Controls
+            self.header = Some(match self.selected % COLS {
+                0..=2 => Header::Weather,
+                3..=4 => Header::Controls,
+                _ => Header::Wifi,
             });
         }
     }
@@ -244,7 +272,14 @@ impl Ui {
             return;
         }
         self.pin_focused = false;
-        if self.panel == Some(Panel::SpeedTest) {
+        if self.panel == Some(Panel::City) {
+            self.city.cancel();
+            self.panel = Some(Panel::Weather);
+            self.panel_index = 0;
+        } else if self.panel == Some(Panel::Weather) {
+            self.panel = None;
+            self.header = Some(Header::Weather);
+        } else if self.panel == Some(Panel::SpeedTest) {
             self.panel = Some(Panel::Wifi);
             self.panel_index = 0;
         } else if self.panel == Some(Panel::Wifi) {
@@ -262,8 +297,51 @@ impl Ui {
         }
     }
     fn activate(&mut self, catalog: &Catalog) -> Option<Action> {
+        if self.panel == Some(Panel::City) {
+            if self.city.saving {
+                return None;
+            }
+            match self.panel_index {
+                0..=29 => self
+                    .city
+                    .type_text(&(city::KEYS.as_bytes()[self.panel_index] as char).to_string()),
+                city::SPACE => self.city.type_text(" "),
+                city::DELETE => self.city.delete(),
+                city::CLEAR => self.city.clear(),
+                city::SEARCH => {
+                    return self
+                        .city
+                        .begin()
+                        .map(|(id, text)| Action::SearchCity(id, text))
+                }
+                city::AUTO => return Some(Action::ChooseCity(None)),
+                city::BACK => self.back(),
+                index => {
+                    return self
+                        .city
+                        .results
+                        .get(index - city::RESULTS)
+                        .cloned()
+                        .map(|p| Action::ChooseCity(Some(p)))
+                }
+            }
+            return None;
+        }
         if let Some(moving) = &self.moving {
             return (!moving.saving).then(|| Action::SaveOrder(preferences::tile_ids(catalog)));
+        }
+        if self.panel == Some(Panel::Weather) {
+            if self.panel_index == 0 {
+                self.city.clear();
+                self.panel = Some(Panel::City);
+                self.panel_index = 0;
+                return None;
+            }
+            if self.panel_index == 1 {
+                return Some(Action::RefreshWeather);
+            }
+            self.back();
+            return None;
         }
         if self.panel == Some(Panel::SpeedTest) {
             if self.panel_index == 0 {
@@ -309,6 +387,7 @@ impl Ui {
             self.panel = Some(match header {
                 Header::Wifi => Panel::Wifi,
                 Header::Controls => Panel::Controls,
+                Header::Weather => Panel::Weather,
             });
             self.panel_index = 0;
         } else {
@@ -318,15 +397,34 @@ impl Ui {
         None
     }
     fn pointer(&mut self, x: f32, y: f32, catalog: &Catalog) -> bool {
+        if self.panel == Some(Panel::City) {
+            for index in 0..city::RESULTS + self.city.results.len() {
+                let (left, top, w, h) = city::bounds(index);
+                if (left..left + w).contains(&x) && (top..top + h).contains(&y) {
+                    self.panel_index = index;
+                    return true;
+                }
+            }
+            return false;
+        }
         if self.moving.is_some() {
             // Pointer movement must not drop or change the tile being moved with the arrows.
             let (left, top) = self.positions[self.selected].value_at(Instant::now());
             return (left..left + CARD_W).contains(&x)
                 && (top - self.scroll.value()..top - self.scroll.value() + CARD_H).contains(&y);
         }
-        if matches!(self.panel, Some(Panel::Wifi | Panel::SpeedTest)) {
-            for i in 0..2 {
-                let (left, top, width, height) = if self.panel == Some(Panel::Wifi) {
+        if matches!(
+            self.panel,
+            Some(Panel::Wifi | Panel::SpeedTest | Panel::Weather)
+        ) {
+            for i in 0..if self.panel == Some(Panel::Weather) {
+                3
+            } else {
+                2
+            } {
+                let (left, top, width, height) = if self.panel == Some(Panel::Weather) {
+                    weather_action_bounds(i)
+                } else if self.panel == Some(Panel::Wifi) {
                     wifi_action_bounds(i)
                 } else {
                     speed_action_bounds(i)
@@ -339,7 +437,9 @@ impl Ui {
             return false;
         }
         if self.panel.is_some() {
-            if (1244.0..1796.0).contains(&x) && y >= PANEL_ROW_TOP {
+            if (SETTINGS_PANEL_LEFT + 24.0..SETTINGS_PANEL_LEFT + 576.0).contains(&x)
+                && y >= PANEL_ROW_TOP
+            {
                 let i = ((y - PANEL_ROW_TOP) / PANEL_ROW_STEP) as usize;
                 if i < self.items(catalog).len() && (y - PANEL_ROW_TOP) % PANEL_ROW_STEP < 76.0 {
                     if self.panel == Some(Panel::Inputs) && (PIN_LEFT - 12.0..PIN_LEFT).contains(&x)
@@ -356,7 +456,11 @@ impl Ui {
         for (header, (left, top, width, height)) in [
             (Header::Wifi, wifi_bounds()),
             (Header::Controls, status_bounds()),
+            (Header::Weather, weather_bounds(catalog.apps.len())),
         ] {
+            if header == Header::Weather && self.scroll.value() > 1.0 {
+                continue;
+            }
             if (left..left + width).contains(&x) && (top..top + height).contains(&y) {
                 self.header = Some(header);
                 return true;
@@ -546,6 +650,8 @@ fn main() -> Result<()> {
     let launcher = platform::luna::worker(preview);
     let wifi_worker = wifi::worker(preview);
     let mut wifi_monitor = wifi::Monitor::new(Instant::now());
+    let mut weather_monitor = weather::Monitor::new(preview, prefs.weather_location.clone());
+    let city_worker = city::worker();
     // Set before window creation; leave Home owned by webOS so it remains an escape route.
     sdl3::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_BACK", "true");
     sdl3::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_EXIT", "true");
@@ -622,6 +728,12 @@ fn main() -> Result<()> {
                 wifi_details: true,
                 wifi_selection: 0,
                 speed_test: None,
+                weather: &weather_monitor.state,
+                weather_focused: false,
+                weather_details: false,
+                weather_selection: 0,
+                weather_location: prefs.weather_location.as_ref(),
+                city_picker: None,
                 move_elapsed: Some(0.08),
                 move_hint: None,
                 toast: Some("Home"),
@@ -696,10 +808,21 @@ fn main() -> Result<()> {
                             Some(Keycode::Return | Keycode::KpEnter) if !repeat => {
                                 ui.confirm_down(ConfirmButton::Key, Instant::now(), &catalog);
                             }
+                            Some(Keycode::Backspace) if ui.panel == Some(Panel::City) => {
+                                ui.city.delete();
+                                ui.panel_index = city::SEARCH;
+                                ui.confirm = None;
+                            }
                             Some(Keycode::Escape | Keycode::Backspace) if !repeat => ui.back(),
                             _ => interacted = false,
                         }
                     }
+                }
+                Event::TextInput { text, .. } if ui.panel == Some(Panel::City) => {
+                    ui.city.type_text(&text);
+                    ui.panel_index = city::SEARCH;
+                    ui.confirm = None;
+                    interacted = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::Return | Keycode::KpEnter),
@@ -780,6 +903,27 @@ fn main() -> Result<()> {
             if launch == Some(Action::SpeedTest) {
                 speed_test.toggle();
             }
+            if launch == Some(Action::RefreshWeather) {
+                weather_monitor.refresh();
+            }
+            if let Some(Action::SearchCity(generation, query)) = &launch {
+                if city_worker
+                    .requests
+                    .try_send((*generation, query.clone()))
+                    .is_err()
+                {
+                    ui.city
+                        .finish(*generation, Err(anyhow::anyhow!("City search busy")));
+                }
+            }
+            if ui.panel != previous_panel {
+                if ui.panel == Some(Panel::City) {
+                    video.text_input().start(&window);
+                }
+                if previous_panel == Some(Panel::City) {
+                    video.text_input().stop(&window);
+                }
+            }
             let current_target = ui.focus_target();
             if focused
                 && navigation
@@ -794,12 +938,16 @@ fn main() -> Result<()> {
             let change = match &launch {
                 Some(Action::TogglePin(id)) => Some(prefs.toggled(id)),
                 Some(Action::SaveOrder(order)) => Some(prefs.with_order(order)),
+                Some(Action::ChooseCity(location)) => Some(prefs.with_location(location.clone())),
                 _ => None,
             };
             if let Some(change) = change {
                 if !preference_pending {
                     if preference_writer.requests.try_send(change).is_ok() {
                         preference_pending = true;
+                        if matches!(launch, Some(Action::ChooseCity(_))) {
+                            ui.city.saving = true;
+                        }
                         ui.toast = None;
                         if let Some(moving) = &mut ui.moving {
                             moving.saving = true;
@@ -832,6 +980,18 @@ fn main() -> Result<()> {
         }
         dirty |= ui.hold_tick(Instant::now(), &catalog, focused && !preference_pending);
         dirty |= speed_test.poll();
+        for (generation, result) in city_worker.results.try_iter() {
+            if ui.city.finish(generation, result) {
+                ui.confirm = None;
+                if ui.panel == Some(Panel::City)
+                    && ui.panel_index == city::SEARCH
+                    && !ui.city.results.is_empty()
+                {
+                    ui.panel_index = city::RESULTS;
+                }
+                dirty = true;
+            }
+        }
         let mut refresh_catalog = false;
         for update in catalog_worker.results.try_iter() {
             source_catalog = update.catalog;
@@ -840,9 +1000,16 @@ fn main() -> Result<()> {
         }
         for result in preference_writer.results.try_iter() {
             preference_pending = false;
+            let city_saved = ui.city.saving;
+            ui.city.saving = false;
             match result {
                 Ok(saved) => {
                     prefs = saved;
+                    weather_monitor.select(prefs.weather_location.clone());
+                    if city_saved && ui.panel == Some(Panel::City) {
+                        ui.back();
+                        video.text_input().stop(&window);
+                    }
                     ui.save_finished(true);
                     refresh_catalog = true;
                 }
@@ -879,6 +1046,7 @@ fn main() -> Result<()> {
         }
         let now = Instant::now();
         dirty |= wifi_monitor.expire(now);
+        dirty |= weather_monitor.tick(focused);
         if wifi_monitor.due(now, focused) {
             match wifi_worker.requests.try_send(()) {
                 Ok(()) => wifi_monitor.start(),
@@ -953,7 +1121,12 @@ fn main() -> Result<()> {
                     date: &date,
                     panel: ui
                         .panel
-                        .filter(|p| !matches!(p, Panel::Wifi | Panel::SpeedTest))
+                        .filter(|p| {
+                            !matches!(
+                                p,
+                                Panel::Wifi | Panel::SpeedTest | Panel::Weather | Panel::City
+                            )
+                        })
                         .map(|_| (items.as_slice(), ui.panel_index)),
                     input_pins: (ui.panel == Some(Panel::Inputs)).then_some(input_pins.as_slice()),
                     pin_focused: ui.pin_focused,
@@ -963,6 +1136,13 @@ fn main() -> Result<()> {
                     wifi_selection: ui.panel_index,
                     speed_test: (ui.panel == Some(Panel::SpeedTest))
                         .then_some((&speed_test.state, ui.panel_index)),
+                    weather: &weather_monitor.state,
+                    weather_focused: ui.header == Some(Header::Weather),
+                    weather_details: ui.panel == Some(Panel::Weather),
+                    weather_selection: ui.panel_index,
+                    weather_location: prefs.weather_location.as_ref(),
+                    city_picker: (ui.panel == Some(Panel::City))
+                        .then_some((&ui.city, ui.panel_index)),
                     move_elapsed: ui
                         .moving
                         .as_ref()
@@ -1029,6 +1209,81 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn city_picker_remote_keyboard_results_pointer_and_cancel() {
+        let catalog = catalog();
+        let mut ui = Ui::new(catalog.apps.len());
+        ui.panel = Some(Panel::Weather);
+        ui.activate(&catalog);
+        assert_eq!(ui.panel, Some(Panel::City));
+        ui.activate(&catalog); // Q
+        ui.direction(Direction::Right, &catalog);
+        ui.activate(&catalog); // W
+        assert_eq!(ui.city.query, "QW");
+        ui.panel_index = city::DELETE;
+        ui.activate(&catalog);
+        assert_eq!(ui.city.query, "Q");
+        ui.panel_index = city::CLEAR;
+        ui.activate(&catalog);
+        ui.city.type_text("Mumbai");
+        ui.panel_index = city::SEARCH;
+        assert!(
+            matches!(ui.activate(&catalog), Some(Action::SearchCity(_, query)) if query == "Mumbai")
+        );
+        let place = weather::Location {
+            city: "Mumbai".into(),
+            latitude: 19.07,
+            longitude: 72.88,
+            region: "Maharashtra".into(),
+            country: "India".into(),
+        };
+        ui.city.results = vec![place.clone()];
+        let (x, y, _, _) = city::bounds(city::RESULTS);
+        assert!(ui.pointer(x + 20.0, y + 20.0, &catalog));
+        assert_eq!(ui.activate(&catalog), Some(Action::ChooseCity(Some(place))));
+        ui.city.saving = true;
+        assert!(ui.activate(&catalog).is_none());
+        ui.city.saving = false;
+        ui.panel_index = city::AUTO;
+        assert_eq!(ui.activate(&catalog), Some(Action::ChooseCity(None)));
+        ui.back();
+        assert_eq!(ui.panel, Some(Panel::Weather));
+        assert!(!ui.city.searching);
+    }
+
+    #[test]
+    fn weather_navigation_refresh_back_and_pointer() {
+        let catalog = catalog();
+        let mut ui = Ui::new(catalog.apps.len());
+        ui.direction(Direction::Up, &catalog);
+        assert_eq!(ui.header, Some(Header::Weather));
+        assert_eq!(ui.activate(&catalog), None);
+        assert_eq!(ui.panel, Some(Panel::Weather));
+        ui.direction(Direction::Down, &catalog);
+        assert_eq!(ui.activate(&catalog), Some(Action::RefreshWeather));
+        ui.direction(Direction::Down, &catalog);
+        ui.activate(&catalog);
+        assert_eq!(ui.panel, None);
+        assert_eq!(ui.header, Some(Header::Weather));
+        ui.direction(Direction::Right, &catalog);
+        assert_eq!(ui.header, Some(Header::Controls));
+        ui.direction(Direction::Down, &catalog);
+        assert_eq!(ui.header, None);
+        let (x, y, _, _) = weather_bounds(catalog.apps.len());
+        assert!(ui.pointer(x + 30.0, y + 30.0, &catalog));
+        ui.activate(&catalog);
+        assert!(!ui.pointer(1700.0, 800.0, &catalog));
+        let (x, y, _, _) = weather_action_bounds(2);
+        assert!(ui.pointer(x + 20.0, y + 20.0, &catalog));
+        ui.activate(&catalog);
+        ui.back();
+        assert!(!ui.quit);
+        for count in [1, 6, 7, 12, 13, 18, 30] {
+            let (_, y, _, h) = weather_bounds(count);
+            assert!(y + h < grid_top(count) - PAD);
+        }
+    }
 
     fn pick_up(ui: &mut Ui, catalog: &Catalog, button: ConfirmButton) {
         let now = Instant::now();
@@ -1138,6 +1393,7 @@ mod tests {
         let prefs = preferences::Preferences {
             pinned_inputs: vec!["preview.hdmi1".into()],
             tile_order: vec!["preview.hdmi1".into()],
+            ..Default::default()
         };
         let mut display = prefs.catalog(&source);
         let mut ui = Ui::new(display.apps.len());
@@ -1320,7 +1576,10 @@ mod tests {
         ui.direction(Direction::Right, &catalog);
         assert_eq!(ui.focus_target(), Some(FocusTarget::App(1)));
         ui.direction(Direction::Up, &catalog);
-        assert_eq!(ui.focus_target(), Some(FocusTarget::Header(Header::Wifi)));
+        assert_eq!(
+            ui.focus_target(),
+            Some(FocusTarget::Header(Header::Weather))
+        );
         ui.direction(Direction::Down, &catalog);
         assert_eq!(ui.focus_target(), Some(FocusTarget::App(1)));
     }
@@ -1431,15 +1690,24 @@ mod tests {
         let catalog = catalog();
         let mut ui = Ui::new(2);
         ui.direction(Direction::Up, &catalog);
-        assert_eq!(ui.focus_target(), Some(FocusTarget::Header(Header::Wifi)));
-        ui.direction(Direction::Left, &catalog);
-        assert_eq!(ui.focus_target(), Some(FocusTarget::Header(Header::Wifi)));
         ui.direction(Direction::Right, &catalog);
         assert_eq!(
             ui.focus_target(),
             Some(FocusTarget::Header(Header::Controls))
         );
         ui.direction(Direction::Left, &catalog);
+        assert_eq!(
+            ui.focus_target(),
+            Some(FocusTarget::Header(Header::Weather))
+        );
+        ui.direction(Direction::Right, &catalog);
+        assert_eq!(
+            ui.focus_target(),
+            Some(FocusTarget::Header(Header::Controls))
+        );
+        ui.direction(Direction::Right, &catalog);
+        assert_eq!(ui.focus_target(), Some(FocusTarget::Header(Header::Wifi)));
+        ui.direction(Direction::Right, &catalog);
         assert!(ui.activate(&catalog).is_none());
         assert_eq!(ui.panel, Some(Panel::Wifi));
         assert!(!ui.pointer(200.0, 400.0, &catalog));
@@ -1456,7 +1724,7 @@ mod tests {
         ui.activate(&catalog);
         ui.back();
         assert_eq!(ui.header, Some(Header::Wifi));
-        ui.direction(Direction::Right, &catalog);
+        ui.direction(Direction::Left, &catalog);
         ui.activate(&catalog);
         assert_eq!(ui.items(&catalog), ["Inputs", "TV settings", "Exit"]);
         ui.direction(Direction::Down, &catalog);
@@ -1470,6 +1738,8 @@ mod tests {
         let catalog = catalog();
         let mut ui = Ui::new(2);
         ui.direction(Direction::Up, &catalog);
+        ui.direction(Direction::Right, &catalog);
+        ui.direction(Direction::Right, &catalog);
         assert!(ui.activate(&catalog).is_none());
         assert_eq!(ui.panel, Some(Panel::Wifi));
         assert!(ui.activate(&catalog).is_none());

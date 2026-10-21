@@ -6,6 +6,7 @@ use skia_safe::{
 };
 use std::path::Path;
 use std::sync::mpsc;
+mod weather;
 
 pub struct Frame<'a> {
     pub catalog: &'a Catalog,
@@ -24,6 +25,12 @@ pub struct Frame<'a> {
     pub wifi_details: bool,
     pub wifi_selection: usize,
     pub speed_test: Option<(&'a crate::speedtest::State, usize)>,
+    pub weather: &'a crate::weather::State,
+    pub weather_focused: bool,
+    pub weather_details: bool,
+    pub weather_selection: usize,
+    pub weather_location: Option<&'a crate::weather::Location>,
+    pub city_picker: Option<(&'a crate::city::Picker, usize)>,
     pub move_elapsed: Option<f32>,
     pub move_hint: Option<&'a str>,
     pub toast: Option<&'a str>,
@@ -34,6 +41,7 @@ pub struct Renderer {
     font: Font,
     pub icons: Vec<Option<Image>>,
     glow: Image,
+    symbols: crate::symbols::Symbols,
 }
 
 fn paint(color: Color) -> Paint {
@@ -128,6 +136,7 @@ impl Renderer {
             font,
             icons: vec![None; count],
             glow: rgba_image(&pixels, 256, 96)?,
+            symbols: crate::symbols::Symbols::new()?,
         })
     }
 
@@ -191,37 +200,41 @@ impl Renderer {
         }
         self.card(canvas, f, f.selected);
 
-        self.wifi_icon(canvas, f.wifi, f.wifi_focused);
+        if f.scroll < 1.0 {
+            self.weather_summary(canvas, f);
+        }
 
-        // The status button stays separate from scrolling content.
-        let (status_x, status_y, status_w, status_h) = status_bounds();
-        canvas.draw_round_rect(
-            Rect::from_xywh(status_x, status_y, status_w, status_h),
-            36.0,
-            36.0,
-            &paint(if f.status {
-                Color::from_rgb(220, 221, 227)
-            } else {
-                Color::from_argb(225, 34, 35, 41)
-            }),
+        self.wifi_icon(
+            canvas,
+            f.wifi,
+            f.wifi_focused && !f.wifi_details && f.speed_test.is_none(),
         );
+
+        // Header controls stay separate from scrolling content.
+        let (status_x, status_y, status_w, status_h) = status_bounds();
+        let mut clock_font = self.font.clone();
+        clock_font.set_size(27.0);
+        let clock_right = status_x + status_w / 2.0 - HEADER_ICON_SIZE / 2.0 - HEADER_ICON_GAP;
         self.text(
             canvas,
             f.clock,
-            status_x + 90.0,
+            clock_right - clock_font.measure_str(f.clock, None).0,
             status_y + 46.0,
             27.0,
-            if f.status { Color::BLACK } else { Color::WHITE },
-            true,
+            Color::WHITE,
+            false,
         );
-        let symbol = if f.status {
-            Color::BLACK
+        let settings_focused = f.status && f.panel.is_none();
+        let symbol = if settings_focused {
+            Color::WHITE
         } else {
-            Color::from_rgb(210, 211, 218)
+            Color::from_rgb(220, 221, 227)
         };
         // Eight rounded teeth and an open centre, like Apple's gearshape symbol.
         canvas.save();
-        canvas.translate((status_x + 191.0, status_y + 36.0));
+        canvas.translate((status_x + status_w / 2.0, status_y + status_h / 2.0));
+        let scale = HEADER_ICON_SIZE / 32.0 * if settings_focused { 1.15 } else { 1.0 };
+        canvas.scale((scale, scale));
         let mut gear = paint(symbol);
         for _ in 0..8 {
             canvas.draw_round_rect(Rect::from_xywh(-2.6, -16.0, 5.2, 8.0), 1.2, 1.2, &gear);
@@ -236,9 +249,11 @@ impl Renderer {
                 Rect::from_wh(1920.0, 1080.0),
                 &paint(Color::from_argb(160, 0, 0, 0)),
             );
-            let h = PANEL_ROW_TOP - 160.0 + items.len() as f32 * PANEL_ROW_STEP + 12.0;
+            let left = SETTINGS_PANEL_LEFT;
+            let top = HEADER_PANEL_TOP;
+            let h = PANEL_ROW_TOP - top + items.len() as f32 * PANEL_ROW_STEP + 12.0;
             canvas.draw_round_rect(
-                Rect::from_xywh(1220.0, 160.0, 600.0, h),
+                Rect::from_xywh(left, top, 600.0, h),
                 36.0,
                 36.0,
                 &paint(Color::from_rgb(32, 33, 40)),
@@ -246,14 +261,14 @@ impl Renderer {
             self.text(
                 canvas,
                 f.date,
-                1272.0,
-                216.0,
+                left + 52.0,
+                top + 56.0,
                 22.0,
                 Color::from_rgb(164, 165, 177),
                 false,
             );
             canvas.draw_rect(
-                Rect::from_xywh(1272.0, 238.0, 496.0, 1.0),
+                Rect::from_xywh(left + 52.0, top + 78.0, 496.0, 1.0),
                 &paint(Color::from_argb(32, 255, 255, 255)),
             );
             for (i, item) in items.iter().enumerate() {
@@ -262,10 +277,10 @@ impl Renderer {
                 if label_focused {
                     canvas.draw_round_rect(
                         Rect::from_xywh(
-                            1244.0,
+                            left + 24.0,
                             y - 24.0,
                             if f.input_pins.is_some() {
-                                PIN_LEFT - 12.0 - 1244.0
+                                PIN_LEFT - 12.0 - (left + 24.0)
                             } else {
                                 552.0
                             },
@@ -284,7 +299,7 @@ impl Renderer {
                 self.text(
                     canvas,
                     &label,
-                    1272.0,
+                    left + 52.0,
                     y + 24.0,
                     28.0,
                     if label_focused {
@@ -319,7 +334,8 @@ impl Renderer {
             }
         }
         if f.wifi_details {
-            let left = LEFT - PAD;
+            let left = WIFI_PANEL_LEFT;
+            let top = HEADER_PANEL_TOP;
             let text_x = left + 40.0;
             let muted = Color::from_rgb(164, 165, 177);
             canvas.draw_rect(
@@ -327,23 +343,31 @@ impl Renderer {
                 &paint(Color::from_argb(160, 0, 0, 0)),
             );
             canvas.draw_round_rect(
-                Rect::from_xywh(left, 160.0, 680.0, 648.0),
+                Rect::from_xywh(left, top, 680.0, 648.0),
                 36.0,
                 36.0,
                 &paint(Color::from_rgb(32, 33, 40)),
             );
-            self.text(canvas, "Wi-Fi", text_x, 214.0, 30.0, Color::WHITE, false);
+            self.text(
+                canvas,
+                "Wi-Fi",
+                text_x,
+                top + 54.0,
+                30.0,
+                Color::WHITE,
+                false,
+            );
             self.wrapped_text(
                 canvas,
                 f.wifi.name.as_deref().unwrap_or("Network unavailable"),
-                Rect::from_xywh(text_x, 240.0, 600.0, 60.0),
+                Rect::from_xywh(text_x, top + 80.0, 600.0, 60.0),
                 Color::WHITE,
             );
             self.text(
                 canvas,
                 f.wifi.description(),
                 text_x,
-                328.0,
+                top + 168.0,
                 22.0,
                 muted,
                 false,
@@ -353,14 +377,14 @@ impl Renderer {
                     canvas,
                     "Preview data",
                     left + 480.0,
-                    214.0,
+                    top + 54.0,
                     20.0,
                     muted,
                     false,
                 );
             }
             canvas.draw_rect(
-                Rect::from_xywh(text_x, 352.0, 600.0, 1.0),
+                Rect::from_xywh(text_x, top + 192.0, 600.0, 1.0),
                 &paint(Color::from_argb(32, 255, 255, 255)),
             );
             for (i, (label, value)) in [
@@ -380,7 +404,7 @@ impl Renderer {
             .iter()
             .enumerate()
             {
-                let y = 386.0 + i as f32 * 80.0;
+                let y = top + 226.0 + i as f32 * 80.0;
                 self.text(canvas, label, text_x, y, 20.0, muted, false);
                 self.wrapped_text(
                     canvas,
@@ -405,6 +429,12 @@ impl Renderer {
         }
         if let Some((state, selected)) = f.speed_test {
             self.speed_test_panel(canvas, state, selected);
+        }
+        if f.weather_details {
+            self.weather_panel(canvas, f);
+        }
+        if let Some((picker, selected)) = f.city_picker {
+            self.city_panel(canvas, f, picker, selected);
         }
         if let Some(toast) = f.toast {
             canvas.draw_round_rect(
@@ -469,7 +499,8 @@ impl Renderer {
     }
 
     fn speed_test_panel(&self, canvas: &Canvas, state: &crate::speedtest::State, selected: usize) {
-        let left = LEFT - PAD;
+        let left = SPEED_PANEL_LEFT;
+        let top = HEADER_PANEL_TOP;
         let x = left + 40.0;
         let muted = Color::from_rgb(164, 165, 177);
         canvas.draw_rect(
@@ -477,17 +508,25 @@ impl Renderer {
             &paint(Color::from_argb(160, 0, 0, 0)),
         );
         canvas.draw_round_rect(
-            Rect::from_xywh(left, 160.0, 900.0, 680.0),
+            Rect::from_xywh(left, top, 900.0, 680.0),
             36.0,
             36.0,
             &paint(Color::from_rgb(32, 33, 40)),
         );
-        self.text(canvas, "Speed test", x, 214.0, 30.0, Color::WHITE, false);
+        self.text(
+            canvas,
+            "Speed test",
+            x,
+            top + 54.0,
+            30.0,
+            Color::WHITE,
+            false,
+        );
         self.text(
             canvas,
             "Fast.com · Netflix servers",
             x,
-            254.0,
+            top + 94.0,
             22.0,
             muted,
             false,
@@ -497,14 +536,14 @@ impl Renderer {
                 canvas,
                 "Emulator connection",
                 left + 610.0,
-                214.0,
+                top + 54.0,
                 20.0,
                 muted,
                 false,
             );
         }
         canvas.draw_rect(
-            Rect::from_xywh(x, 286.0, 820.0, 1.0),
+            Rect::from_xywh(x, top + 126.0, 820.0, 1.0),
             &paint(Color::from_argb(32, 255, 255, 255)),
         );
         for (i, (label, value)) in [("Download", state.download), ("Upload", state.upload)]
@@ -512,7 +551,7 @@ impl Renderer {
             .enumerate()
         {
             let mx = x + i as f32 * 420.0;
-            self.text(canvas, label, mx, 334.0, 22.0, muted, false);
+            self.text(canvas, label, mx, top + 174.0, 22.0, muted, false);
             let value = value
                 .map(|v| {
                     if v < 10.0 {
@@ -522,10 +561,10 @@ impl Renderer {
                     }
                 })
                 .unwrap_or_else(|| "—".into());
-            self.text(canvas, &value, mx, 412.0, 64.0, Color::WHITE, false);
-            self.text(canvas, "Mbps", mx, 450.0, 20.0, muted, false);
+            self.text(canvas, &value, mx, top + 252.0, 64.0, Color::WHITE, false);
+            self.text(canvas, "Mbps", mx, top + 290.0, 20.0, muted, false);
         }
-        self.text(canvas, "Latency", x, 506.0, 22.0, muted, false);
+        self.text(canvas, "Latency", x, top + 346.0, 22.0, muted, false);
         let latency = state
             .latency
             .map(|v| format!("{v:.0} ms"))
@@ -534,7 +573,7 @@ impl Renderer {
             canvas,
             &latency,
             x + 130.0,
-            506.0,
+            top + 346.0,
             26.0,
             Color::WHITE,
             false,
@@ -543,20 +582,20 @@ impl Renderer {
             canvas,
             &self.ellipsized(&state.message, 820.0, 22.0),
             x,
-            552.0,
+            top + 392.0,
             22.0,
             Color::WHITE,
             false,
         );
         if state.phase.active() {
             canvas.draw_round_rect(
-                Rect::from_xywh(x, 576.0, 820.0, 4.0),
+                Rect::from_xywh(x, top + 416.0, 820.0, 4.0),
                 2.0,
                 2.0,
                 &paint(Color::from_rgb(65, 66, 76)),
             );
             canvas.draw_round_rect(
-                Rect::from_xywh(x, 576.0, 820.0 * state.progress.max(0.02), 4.0),
+                Rect::from_xywh(x, top + 416.0, 820.0 * state.progress.max(0.02), 4.0),
                 2.0,
                 2.0,
                 &paint(Color::from_rgb(185, 202, 238)),
@@ -574,7 +613,7 @@ impl Renderer {
             canvas,
             &self.ellipsized(&note, 820.0, 19.0),
             x,
-            620.0,
+            top + 460.0,
             19.0,
             muted,
             false,
@@ -586,26 +625,27 @@ impl Renderer {
 
     fn wifi_icon(&self, canvas: &Canvas, status: &Status, focused: bool) {
         let (x, y, w, h) = wifi_bounds();
-        let background = if focused {
-            Color::from_rgb(220, 221, 227)
-        } else {
-            Color::BLACK
-        };
-        if focused {
-            canvas.draw_round_rect(Rect::from_xywh(x, y, w, h), 36.0, 36.0, &paint(background));
-        }
+        let background = Color::BLACK;
+        canvas.save();
+        let center = (x + w / 2.0, y + h / 2.0);
+        // The outer arc plus its round stroke fits the same width as the gear.
+        let scale = HEADER_ICON_SIZE / (31.0 * std::f32::consts::SQRT_2 + 4.5)
+            * if focused { 1.15 } else { 1.0 };
+        canvas.translate(center);
+        canvas.scale((scale, scale));
+        canvas.translate((-center.0, -center.1));
         let foreground = if focused {
-            Color::BLACK
+            Color::WHITE
         } else {
             Color::from_rgb(220, 221, 227)
         };
         let inactive = if focused {
-            Color::from_rgb(153, 154, 160)
+            Color::from_rgb(90, 91, 100)
         } else {
             Color::from_rgb(72, 73, 82)
         };
         let cx = x + w / 2.0;
-        let cy = y + h / 2.0 + 12.0;
+        let cy = y + h / 2.0 + 15.0;
         let connected = status.connection == Connection::Connected;
         let mut stroke = paint(foreground);
         stroke
@@ -655,6 +695,7 @@ impl Renderer {
             canvas.draw_str("?", (text_x, cy + 2.0), &font, &stroke);
             canvas.draw_str("?", (text_x, cy + 2.0), &font, &paint(foreground));
         }
+        canvas.restore();
     }
 
     /// Keep long network names and addresses inside the details panel.
@@ -790,38 +831,8 @@ impl Renderer {
                 .set_stroke_join(skia_safe::paint::Join::Round)
                 .set_stroke_cap(skia_safe::paint::Cap::Round);
             if f.catalog.apps[i].id.to_ascii_lowercase().contains("hdmi") {
-                // A solid connector silhouette with rounded shoulders and a recessed socket.
-                let mut port = skia_safe::PathBuilder::new();
-                port.move_to((92.0, 28.0))
-                    .line_to((158.0, 28.0))
-                    .quad_to((166.0, 28.0), (166.0, 36.0))
-                    .line_to((166.0, 54.0))
-                    .quad_to((166.0, 58.0), (163.0, 61.0))
-                    .line_to((153.0, 73.0))
-                    .quad_to((151.0, 76.0), (147.0, 76.0))
-                    .line_to((103.0, 76.0))
-                    .quad_to((99.0, 76.0), (97.0, 73.0))
-                    .line_to((87.0, 61.0))
-                    .quad_to((84.0, 58.0), (84.0, 54.0))
-                    .line_to((84.0, 36.0))
-                    .quad_to((84.0, 28.0), (92.0, 28.0))
-                    .close();
-                canvas.draw_path(&port.detach(), &paint(foreground));
-                canvas.draw_round_rect(
-                    Rect::from_xywh(96.0, 39.0, 58.0, 17.0),
-                    4.0,
-                    4.0,
-                    &paint(background),
-                );
-                for n in 0..7 {
-                    let x = 102.0 + n as f32 * 7.0;
-                    canvas.draw_round_rect(
-                        Rect::from_xywh(x, 39.0, 3.0, 7.0),
-                        1.5,
-                        1.5,
-                        &paint(foreground),
-                    );
-                }
+                self.symbols
+                    .draw(canvas, "hdmi-port", 95.0, 22.0, 60.0, foreground);
             } else {
                 canvas.draw_round_rect(Rect::from_xywh(97.0, 28.0, 56.0, 38.0), 5.0, 5.0, &stroke);
                 canvas.draw_line((114.0, 76.0), (136.0, 76.0), &stroke);

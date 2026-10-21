@@ -8,8 +8,12 @@ and subscriptions remain managed in those apps.
 Use the remote arrows or pointer to select an app, then press OK to open it.
 The selected icon enlarges, and focus changes play a short navigation click.
 
-Move up from the first app row to reach the top controls. Left and Right switch
-between Wi-Fi and the clock/settings control; Down returns to the app grid.
+Move up from the first app row to reach the header. Left and Right move between
+weather, settings and Wi-Fi in that order. Down returns to the
+app grid. The pointer can select each control directly. Wi-Fi sits beside the
+clock and settings at the top right, ordered time, settings, Wi-Fi; weather aligns
+with them at the top left. Settings and Wi-Fi panels open below their icons,
+aligned to the icon's right edge.
 
 The settings menu offers **Inputs**, **TV settings** and **Exit**. Back closes a
 panel; from Inputs, it returns to the settings menu. Back on the app grid or
@@ -51,9 +55,40 @@ Choices are saved on that TV and survive app restarts and catalog refreshes.
 If an input temporarily disappears from the TV's catalog, its tile returns when
 the input is reported again. Removing Home also removes its saved pins.
 
+## Weather and air quality
+
+Home shows the detected city, temperature, conditions, daily high/low and Indian
+AQI above the app tiles. The layout compacts when three rows need the space.
+Select the weather area for feels-like temperature, reading age, the main air
+pollutant, **Change city** and **Refresh**. Back or **Close** returns to Home.
+
+To choose a city, select **Change city**, enter its name with the on-screen
+keyboard or a physical keyboard, then select **Search**. Choose a result using
+its state and country to distinguish cities with the same name. The selected
+city is saved on that TV and survives restarts and app-list updates. Weather
+and AQI both use that city's coordinates. **Back** cancels without changing the
+saved city; **Use automatic location** restores detection from the public IP.
+
+Automatic location is estimated from your public IP using IPWhois. It can identify your
+ISP's routing location instead of your actual city, especially with a VPN.
+The displayed city lets you check this. The lookup goes directly from the TV;
+the computer running tvhome is not involved. City searches send the entered
+name to Open-Meteo's GeoNames-based search service. Choosing a city bypasses the
+IP lookup and sends that city's coordinates to the weather and air-quality services.
+
+Weather comes from Open-Meteo. Air quality uses CAMS regional model data through
+Open-Meteo, converted to the Indian AQI scale. It is a model estimate, not a local
+CPCB monitoring-station reading or an indoor air-quality measurement. Severe
+readings are shown as **400+**. Missing readings show a dash, never a good score.
+
+Home updates every 15 minutes while open and retries failed updates after five
+minutes. Readings older than two hours disappear. Nothing needs to be configured
+on the computer. These requests use internet access; they do not change network
+settings.
+
 ## Wi-Fi
 
-Select the top-left Wi-Fi icon to see the network name, signal level, IP address
+Select the Wi-Fi icon beside the clock to see the network name, signal level, IP address
 and router address when the TV supplies them.
 
 | Signal level | Display |

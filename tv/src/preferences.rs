@@ -13,8 +13,15 @@ pub struct Preferences {
     pub pinned_inputs: Vec<String>,
     #[serde(default)]
     pub tile_order: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weather_location: Option<crate::weather::Location>,
 }
 impl Preferences {
+    pub fn with_location(&self, location: Option<crate::weather::Location>) -> Self {
+        let mut next = self.clone();
+        next.weather_location = location;
+        next
+    }
     pub fn contains(&self, id: &str) -> bool {
         self.pinned_inputs.iter().any(|p| p == id)
     }
@@ -58,6 +65,9 @@ impl Preferences {
         next
     }
     fn validate(&self) -> Result<()> {
+        if let Some(location) = &self.weather_location {
+            location.validate()?;
+        }
         ensure!(self.pinned_inputs.len() <= 65, "Too many pinned inputs");
         ensure!(self.tile_order.len() <= 1024, "Too many saved tiles");
         for ids in [&self.pinned_inputs, &self.tile_order] {
@@ -297,10 +307,30 @@ mod tests {
                 .as_nanos()
         ));
         let path = root.join("preferences.json");
-        let pins = Preferences::default().toggled("preview.hdmi1");
+        let location = crate::weather::Location {
+            city: "Mumbai".into(),
+            latitude: 19.07,
+            longitude: 72.88,
+            region: "Maharashtra".into(),
+            country: "India".into(),
+        };
+        let pins = Preferences::default()
+            .toggled("preview.hdmi1")
+            .with_location(Some(location.clone()));
         assert_eq!(Preferences::load(&path).unwrap(), Preferences::default());
         pins.save(&path).unwrap();
         assert_eq!(Preferences::load(&path).unwrap(), pins);
+        let reordered = pins.with_order(&ids(&["preview.hdmi1", "preview.app"]));
+        assert_eq!(reordered.weather_location, Some(location.clone()));
+        assert_eq!(
+            pins.toggled("preview.hdmi1").weather_location,
+            Some(location)
+        );
+        let automatic = pins.with_location(None);
+        automatic.save(&path).unwrap();
+        assert!(Preferences::load(&path).unwrap().weather_location.is_none());
+        assert_eq!(automatic.pinned_inputs, pins.pinned_inputs);
+        pins.save(&path).unwrap();
         let invalid = Preferences {
             pinned_inputs: vec!["duplicate".into(), "duplicate".into()],
             ..Default::default()
