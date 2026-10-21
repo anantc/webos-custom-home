@@ -1,3 +1,4 @@
+mod background;
 mod common;
 mod install;
 mod inventory;
@@ -127,8 +128,8 @@ fn rotate(path: &Path) -> std::io::Result<()> {
 fn log(message: &str) {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
+        .unwrap_or_default();
+    let timestamp = format!("{}.{:03}", timestamp.as_secs(), timestamp.subsec_millis());
     if let Some(path) = LOG_PATH.get() {
         let path = path.lock().unwrap();
         if rotate(&path).is_ok() {
@@ -204,6 +205,9 @@ async fn execute(cli: Cli) -> Result<()> {
     let config = Config::load(tv, matches!(command, Action::Configure { .. }))?;
     // Acquire before failure reporting: a duplicate process is not a failed TV.
     let _operation_lock = match command {
+        Action::Install | Action::Uninstall => Some(common::FileLock::acquire(
+            &config.state_dir().join("background.lock"),
+        )?),
         Action::Watch => Some(common::FileLock::acquire(
             &config.state_dir().join("watch.lock"),
         )?),

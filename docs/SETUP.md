@@ -18,16 +18,16 @@ home directory. Choose a local name for each TV, such as `living-room` or
 choose. The executable contains the Home TV package and license notices.
 
 Download the **executable and its checksum** from the same row below into your
-Downloads folder. These links are for tvhome 0.1.1. Choose your computer's platform;
+Downloads folder. These links are for tvhome 0.1.2. Choose your computer's platform;
 on a Mac, **About This Mac** shows an Apple chip or Intel processor. On Linux,
 `uname -m` reports `aarch64` for ARM64 or `x86_64` for x64.
 
 | Computer | Executable | Checksum | Requirements |
 | --- | --- | --- | --- |
-| Apple Silicon Mac | [tvhome-darwin-arm64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-darwin-arm64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-darwin-arm64.sha256) | macOS 13+ |
-| Intel Mac | [tvhome-darwin-x64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-darwin-x64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-darwin-x64.sha256) | macOS 13+ |
-| ARM64 Linux | [tvhome-linux-arm64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-linux-arm64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-linux-arm64.sha256) | glibc 2.35+; systemd for background jobs |
-| x64 Linux | [tvhome-linux-x64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-linux-x64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.1/tvhome-linux-x64.sha256) | glibc 2.35+; systemd for background jobs |
+| Apple Silicon Mac | [tvhome-darwin-arm64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.2/tvhome-darwin-arm64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.2/tvhome-darwin-arm64.sha256) | macOS 13+ |
+| Intel Mac | [tvhome-darwin-x64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.2/tvhome-darwin-x64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.2/tvhome-darwin-x64.sha256) | macOS 13+ |
+| ARM64 Linux | [tvhome-linux-arm64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.2/tvhome-linux-arm64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.2/tvhome-linux-arm64.sha256) | glibc 2.35+; systemd for background jobs |
+| x64 Linux | [tvhome-linux-x64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.2/tvhome-linux-x64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.2/tvhome-linux-x64.sha256) | glibc 2.35+; systemd for background jobs |
 
 ### Verify and install
 
@@ -89,7 +89,7 @@ Open a **new terminal** so the shell loads the updated command path, then run:
 tvhome --version
 ```
 
-It should report `tvhome 0.1.1`. In the current terminal, or with another shell,
+It should report `tvhome 0.1.2`. In the current terminal, or with another shell,
 use `~/.local/bin/tvhome` in place of `tvhome` in subsequent commands.
 The downloaded file can be deleted after installation.
 
@@ -243,10 +243,13 @@ Return to LG Home within three seconds to leave LG Home open. If renewal is
 enabled, setup prints the remaining session hours confirmed by LG. If monitoring
 is enabled, the corresponding Healthchecks checks should become **Up**.
 
-To change these choices later, first stop the TV's jobs with
-`tvhome --tv living-room uninstall`, then rerun `background`. Pause checks in
-Healthchecks.io for any jobs or monitoring you disable, to avoid missed-ping
-alerts. [Background operation](BACKGROUND.md) explains logs and failures.
+To change these choices later, rerun `tvhome --tv living-room background`.
+The existing jobs keep running while you answer. Your answers stay in memory
+until the end; setup then stops this TV's jobs, saves the new settings and
+restarts the selected jobs. If applying the settings fails or you interrupt that
+step, setup attempts to restore the previous settings and jobs and reports the
+result. Other TVs keep running. Pause checks in Healthchecks.io for any jobs or
+monitoring you disable, to avoid missed-ping alerts. [Background operation](BACKGROUND.md) explains logs and failures.
 
 ## Add another TV
 

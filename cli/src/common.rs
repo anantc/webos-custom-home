@@ -9,16 +9,18 @@ use std::{
     time::Duration,
 };
 
-// Errors deliberately carry only fixed messages. HTTP/SSH errors may contain secrets.
+// Network errors deliberately carry only fixed messages; upstream errors may contain secrets.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
     Fault(&'static str),
     Unavailable,
+    Busy,
 }
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Fault(s) => f.write_str(s),
+            Self::Busy => f.write_str("This operation is already running. Stop the foreground command or this TV's service before retrying."),
             Self::Unavailable => f.write_str("TV unavailable; retrying when it returns."),
         }
     }
@@ -341,7 +343,12 @@ impl FileLock {
             .open(path)
             .map_err(|_| fault("Cannot open tvhome lock."))?;
         if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-            return Err(fault("This operation is already running. Stop the foreground command or this TV's service before retrying."));
+            let error = std::io::Error::last_os_error();
+            return Err(if error.kind() == std::io::ErrorKind::WouldBlock {
+                Error::Busy
+            } else {
+                fault("Cannot acquire the operation lock.")
+            });
         }
         Ok(Self(file))
     }

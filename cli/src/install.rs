@@ -1,6 +1,9 @@
 use crate::common::{fault, private_dir, private_write, Config, Result};
 use std::{fs, os::unix::fs::PermissionsExt, path::Path, time::Duration};
-use tokio::{process::Command, time::timeout};
+use tokio::{
+    process::Command,
+    time::{sleep, timeout, Instant},
+};
 fn linux_timer(config: &Config) -> String {
     format!("[Unit]\nDescription=Renew LG Developer Mode for {} daily\n\n[Timer]\nOnBootSec=2min\nOnUnitActiveSec=24h\nUnit={}\n\n[Install]\nWantedBy=timers.target\n", config.tv, config.linux_unit("renew", "service"))
 }
@@ -77,6 +80,49 @@ fn linux_service(config: &Config, command: &str) -> Result<String> {
     };
     Ok(format!("[Unit]\nDescription=Native TV Home {command}\n\n[Service]\nType={kind}\nExecStart={arguments}\nUMask=0077\n{extra}"))
 }
+fn service_failure(program: &str, args: &[&str], output: &std::process::Output) -> String {
+    let detail: String = String::from_utf8_lossy(&output.stderr)
+        .trim()
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+        .take(2000)
+        .collect();
+    format!(
+        "Service manager: {program} {} failed ({}): {}",
+        args.join(" "),
+        output.status,
+        if detail.is_empty() {
+            "no error detail returned"
+        } else {
+            &detail
+        }
+    )
+}
+async fn stop_mac_job(domain: &str, label: &str) -> Result<()> {
+    let service = format!("{domain}/{label}");
+    if !command("launchctl", &["print", &service], false)
+        .await?
+        .status
+        .success()
+    {
+        return Ok(());
+    }
+    command("launchctl", &["bootout", &service], true).await?;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while command("launchctl", &["print", &service], false)
+        .await?
+        .status
+        .success()
+    {
+        if Instant::now() >= deadline {
+            return Err(fault(
+                "macOS did not finish stopping the previous job. Retry after it exits.",
+            ));
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
+    Ok(())
+}
 async fn command(program: &str, args: &[&str], check: bool) -> Result<std::process::Output> {
     let output = timeout(
         Duration::from_secs(330),
@@ -86,6 +132,7 @@ async fn command(program: &str, args: &[&str], check: bool) -> Result<std::proce
     .map_err(|_| fault("Service manager timed out."))?
     .map_err(|_| fault("Cannot run the service manager."))?;
     if check && !output.status.success() {
+        crate::log(&service_failure(program, args, &output));
         return Err(fault(
             "Could not install/start jobs. Check the service manager and tvhome logs.",
         ));
@@ -125,7 +172,7 @@ fn linux_units(config: &Config, jobs: &[&str]) -> Result<Vec<(String, String)>> 
     }
     Ok(units)
 }
-fn validate(config: &Config) -> Result<()> {
+pub(crate) fn validate(config: &Config) -> Result<()> {
     let jobs = selected_jobs(config)?;
     config.host()?;
     config.check_unique()?;
@@ -195,12 +242,7 @@ pub async fn install(config: &Config) -> Result<()> {
             let path = config
                 .home
                 .join(format!("Library/LaunchAgents/{label}.plist"));
-            command(
-                "launchctl",
-                &["bootout", &format!("{domain}/{label}")],
-                false,
-            )
-            .await?;
+            stop_mac_job(&domain, &label).await?;
             if !jobs.contains(&name) {
                 remove(&path)?;
                 continue;
@@ -267,19 +309,11 @@ fn remove(path: &Path) -> Result<()> {
         Err(_) => Err(fault("Cannot remove a service file.")),
     }
 }
-pub async fn uninstall(config: &Config) -> Result<()> {
+pub(crate) async fn stop_jobs(config: &Config) -> Result<()> {
     if cfg!(target_os = "macos") {
         for name in ["watch", "renew"] {
             let label = config.mac_label(name);
-            command(
-                "launchctl",
-                &[
-                    "bootout",
-                    &format!("gui/{}/{label}", unsafe { libc::getuid() }),
-                ],
-                false,
-            )
-            .await?;
+            stop_mac_job(&format!("gui/{}", unsafe { libc::getuid() }), &label).await?;
             remove(
                 &config
                     .home
@@ -304,6 +338,10 @@ pub async fn uninstall(config: &Config) -> Result<()> {
     } else {
         return Err(fault("Unsupported service manager."));
     }
+    Ok(())
+}
+pub async fn uninstall(config: &Config) -> Result<()> {
+    stop_jobs(config).await?;
     crate::log("Jobs removed. Private configuration, keys and executable retained. Pause any configured Healthchecks checks.");
     Ok(())
 }
@@ -311,6 +349,23 @@ pub async fn uninstall(config: &Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn service_error_includes_failed_operation_and_os_detail() {
+        use std::os::unix::process::ExitStatusExt;
+        let output = std::process::Output {
+            status: std::process::ExitStatus::from_raw(5 << 8),
+            stdout: b"not logged".to_vec(),
+            stderr: b"Bootstrap failed: 5: Input/output error\n".to_vec(),
+        };
+        let message = service_failure(
+            "launchctl",
+            &["bootstrap", "gui/501", "/tmp/job.plist"],
+            &output,
+        );
+        assert!(message.contains("launchctl bootstrap gui/501 /tmp/job.plist"));
+        assert!(message.contains("Bootstrap failed: 5: Input/output error"));
+        assert!(!message.contains("not logged"));
+    }
     #[test]
     fn mac_jobs_parse_and_contain_no_secret_values() {
         let mut c = crate::common::test_config(Path::new("/home/a & b"));

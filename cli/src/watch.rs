@@ -1,3 +1,6 @@
+mod timing;
+use timing::Timing;
+
 use crate::{
     common::{fault, Config, Error, Http, Result},
     tv::{self, Event, Peer},
@@ -100,7 +103,6 @@ impl Subscription {
                 }
                 self.pending = false;
                 self.deadline = None;
-                crate::log("Native Home launch confirmed.");
             }
             Some("fg") => {
                 let p = tv::payload(message)?;
@@ -126,7 +128,9 @@ async fn watch_peer<S: AsyncRead + AsyncWrite + Unpin>(
     peer: &mut Peer<S>,
     config: &Config,
     state: &Arc<Mutex<State>>,
+    timing: &mut Timing,
 ) -> Result<()> {
+    let catalog_started = Instant::now();
     let points = peer
         .request(
             "ssap://com.webos.applicationManager/listLaunchPoints",
@@ -140,12 +144,21 @@ async fn watch_peer<S: AsyncRead + AsyncWrite + Unpin>(
     if !points.iter().any(|p| p["id"] == target) {
         return Err(fault("Configured Home launcher is not installed."));
     }
+    crate::log(&timing.event(&format!(
+        "event=launcher_checked elapsed_ms={}",
+        catalog_started.elapsed().as_millis()
+    )));
+    let subscribe_started = Instant::now();
     peer.send(json!({"type":"subscribe","id":"fg","uri":"ssap://com.webos.applicationManager/getForegroundAppInfo","payload":{}})).await?;
     let mut subscription = Subscription::new();
     let mut ping_at = Instant::now() + Duration::from_secs(20);
     let mut pong_deadline: Option<Instant> = None;
+    let mut ping_sent: Option<Instant> = None;
     loop {
         let now = Instant::now();
+        if let Some(line) = timing.expire(now) {
+            crate::log(&line);
+        }
         if subscription.deadline.is_some_and(|d| now >= d) {
             return Err(fault(
                 "TV did not acknowledge the subscription or app launch.",
@@ -155,6 +168,7 @@ async fn watch_peer<S: AsyncRead + AsyncWrite + Unpin>(
             return Err(fault("TV did not respond to the transport ping."));
         }
         if now >= ping_at {
+            ping_sent = Some(Instant::now());
             peer.ping().await?;
             pong_deadline = Some(Instant::now() + Duration::from_secs(10));
             ping_at = Instant::now() + Duration::from_secs(20);
@@ -163,7 +177,8 @@ async fn watch_peer<S: AsyncRead + AsyncWrite + Unpin>(
             .deadline
             .unwrap_or(ping_at)
             .min(pong_deadline.unwrap_or(ping_at))
-            .min(ping_at);
+            .min(ping_at)
+            .min(timing.deadline().unwrap_or(ping_at));
         // Wake at the next protocol deadline even if no foreground changes occur.
         let event =
             match tokio::time::timeout_at(deadline, peer.next(deadline + Duration::from_secs(1)))
@@ -174,15 +189,48 @@ async fn watch_peer<S: AsyncRead + AsyncWrite + Unpin>(
             };
         state.lock().unwrap().progress = Instant::now();
         match event {
-            Event::Pong => pong_deadline = None,
+            Event::Pong => {
+                let received = Instant::now();
+                pong_deadline = None;
+                if let Some(sent) = ping_sent.take() {
+                    crate::log(&timing.event(&format!(
+                        "event=transport_pong rtt_ms={}",
+                        received.duration_since(sent).as_millis()
+                    )));
+                }
+            }
             Event::Json(message) => {
+                let received = Instant::now();
                 let was_subscribed = subscription.subscribed;
-                let launch = subscription.receive(&message, Instant::now())?;
+                let was_pending = subscription.pending;
+                let launch = subscription.receive(&message, received)?;
+                if launch {
+                    let unfinished = timing.end("next_launch", received);
+                    timing.begin_launch(received, !was_subscribed);
+                    peer.send(json!({"type":"request","id":"launch","uri":"ssap://system.launcher/launch","payload":{"id":target}})).await?;
+                    // Record dispatch after flushing the request, before any disk logging.
+                    let sent = Instant::now();
+                    crate::log(&timing.sent(sent));
+                    if let Some(line) = unfinished {
+                        crate::log(&line);
+                    }
+                }
                 if !was_subscribed && subscription.subscribed {
+                    crate::log(&timing.event(&format!(
+                        "event=subscribed elapsed_ms={}",
+                        received.duration_since(subscribe_started).as_millis()
+                    )));
                     state.lock().unwrap().update("watching", false);
                 }
-                if launch {
-                    peer.send(json!({"type":"request","id":"launch","uri":"ssap://system.launcher/launch","payload":{"id":target}})).await?;
+                if message["id"] == "launch" && was_pending {
+                    if let Some(line) = timing.acknowledged(received) {
+                        crate::log(&line);
+                    }
+                }
+                if message["id"] == "fg" && message["payload"]["appId"] == target {
+                    if let Some(line) = timing.foreground(received) {
+                        crate::log(&line);
+                    }
                 }
             }
         }
@@ -194,15 +242,41 @@ async fn watch_loop(
     url: &str,
     state: Arc<Mutex<State>>,
 ) -> Result<()> {
+    let mut connection = 0;
+    let mut disconnected_at = Instant::now();
     loop {
-        state.lock().unwrap().progress = Instant::now();
+        connection += 1;
+        let mut timing = Timing::new(connection);
+        let started = Instant::now();
+        crate::log(&timing.event("event=connect_start"));
+        state.lock().unwrap().progress = started;
         let result = match tv::connect(config, false).await {
             Ok(mut peer) => {
-                let result = watch_peer(&mut peer, config, &state).await;
+                let connected = Instant::now();
+                crate::log(&timing.event(&format!(
+                    "event=connected connect_ms={} reconnect_ms={}",
+                    connected.duration_since(started).as_millis(),
+                    connected.duration_since(disconnected_at).as_millis()
+                )));
+                let result = watch_peer(&mut peer, config, &state, &mut timing).await;
+                disconnected_at = Instant::now();
+                if let Some(line) = timing.end("connection_ended", disconnected_at) {
+                    crate::log(&line);
+                }
+                crate::log(&timing.event(&format!(
+                    "event=connection_ended connected_ms={}",
+                    disconnected_at.duration_since(connected).as_millis()
+                )));
                 peer.close().await;
                 result
             }
-            Err(e) => Err(e),
+            Err(e) => {
+                crate::log(&timing.event(&format!(
+                    "event=connect_failed elapsed_ms={}",
+                    started.elapsed().as_millis()
+                )));
+                Err(e)
+            }
         };
         match result {
             Err(Error::Unavailable) => {
@@ -222,9 +296,11 @@ async fn watch_loop(
             }
             Ok(()) => {}
         }
+        crate::log(&timing.event("event=reconnect_wait delay_ms=20000"));
         sleep(Duration::from_secs(20)).await;
     }
 }
+
 async fn heartbeat_loop(
     http: &Http,
     url: &str,
@@ -271,7 +347,18 @@ async fn catalog_loop(
     state: Arc<Mutex<CatalogHealth>>,
 ) -> Result<()> {
     loop {
+        let started = Instant::now();
         let result = crate::inventory::update(config, template).await;
+        let outcome = match &result {
+            Ok(true) => "updated",
+            Ok(false) => "unchanged",
+            Err(Error::Unavailable) => "unavailable",
+            Err(_) => "failed",
+        };
+        crate::log(&format!(
+            "Catalog timing: result={outcome} elapsed_ms={}",
+            started.elapsed().as_millis()
+        ));
         if let Err(error) = &result {
             if *error != Error::Unavailable {
                 crate::log(&format!("Catalog: {error}"));
@@ -288,6 +375,12 @@ pub async fn run(config: &Config) -> Result<()> {
     if config.key().is_none() {
         return Err(fault("No pairing key. Run tvhome --tv NAME pair first."));
     }
+    crate::log(&format!(
+        "Watcher started: tv={} version={} pid={}",
+        config.tv,
+        env!("CARGO_PKG_VERSION"),
+        std::process::id()
+    ));
     let url = config.ping_url("HC_WATCHER_URL", false)?;
     let http = Http::new()?;
     let template = crate::package::Package::read(crate::package::bundled())?;
@@ -321,6 +414,7 @@ mod tests {
         let (mut client, mut server) = tv::mock_pair().await;
         let c = crate::common::test_config(std::path::Path::new("/tmp"));
         let state = Arc::new(Mutex::new(State::new()));
+        let mut timing = Timing::new(1);
         let simulation = tokio::spawn(async move {
             server
                 .next(Instant::now() + Duration::from_secs(1))
@@ -345,7 +439,7 @@ mod tests {
                 .unwrap();
             std::future::pending::<()>().await;
         });
-        let result = watch_peer(&mut client, &c, &state).await;
+        let result = watch_peer(&mut client, &c, &state, &mut timing).await;
         simulation.abort();
         assert_eq!(
             result,
@@ -354,11 +448,49 @@ mod tests {
             ))
         );
     }
+    #[tokio::test(start_paused = true)]
+    async fn missing_foreground_timing_does_not_fail_an_acknowledged_launch() {
+        let (mut client, mut server) = tv::mock_pair().await;
+        let c = crate::common::test_config(std::path::Path::new("/tmp"));
+        let state = Arc::new(Mutex::new(State::new()));
+        let mut timing = Timing::new(1);
+        let simulation = async {
+            server
+                .next(Instant::now() + Duration::from_secs(1))
+                .await
+                .unwrap();
+            server.send(json!({"id":"apps","payload":{"launchPoints":[{"id":"com.anant.tvhome.native"}]}})).await.unwrap();
+            server
+                .next(Instant::now() + Duration::from_secs(1))
+                .await
+                .unwrap();
+            server
+                .send(json!({"id":"fg","payload":{"appId":LG_HOME}}))
+                .await
+                .unwrap();
+            server
+                .next(Instant::now() + Duration::from_secs(1))
+                .await
+                .unwrap();
+            server
+                .send(json!({"id":"launch","payload":{"returnValue":true}}))
+                .await
+                .unwrap();
+            sleep(Duration::from_secs(11)).await;
+            server.close().await;
+        };
+        let (result, ()) =
+            tokio::join!(watch_peer(&mut client, &c, &state, &mut timing), simulation);
+        assert_eq!(result, Err(Error::Unavailable));
+        assert_eq!(state.lock().unwrap().phase, "watching");
+        assert!(timing.deadline().is_none());
+    }
     #[tokio::test]
     async fn missing_launcher_fails_before_subscribing() {
         let (mut client, mut server) = tv::mock_pair().await;
         let c = crate::common::test_config(std::path::Path::new("/tmp"));
         let state = Arc::new(Mutex::new(State::new()));
+        let mut timing = Timing::new(1);
         let simulation = async {
             server
                 .next(Instant::now() + Duration::from_secs(1))
@@ -369,7 +501,8 @@ mod tests {
                 .await
                 .unwrap();
         };
-        let (result, ()) = tokio::join!(watch_peer(&mut client, &c, &state), simulation);
+        let (result, ()) =
+            tokio::join!(watch_peer(&mut client, &c, &state, &mut timing), simulation);
         assert_eq!(
             result,
             Err(fault("Configured Home launcher is not installed."))
@@ -433,6 +566,7 @@ mod tests {
         let (mut client, mut server) = tv::mock_pair().await;
         let c = crate::common::test_config(std::path::Path::new("/tmp"));
         let state = Arc::new(Mutex::new(State::new()));
+        let mut timing = Timing::new(1);
         let simulation = async {
             server
                 .next(Instant::now() + Duration::from_secs(1))
@@ -460,7 +594,8 @@ mod tests {
                 .await
                 .unwrap();
         };
-        let (result, ()) = tokio::join!(watch_peer(&mut client, &c, &state), simulation);
+        let (result, ()) =
+            tokio::join!(watch_peer(&mut client, &c, &state, &mut timing), simulation);
         assert!(matches!(result, Err(Error::Fault(_))));
     }
 }

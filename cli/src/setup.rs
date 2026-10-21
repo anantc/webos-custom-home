@@ -236,7 +236,8 @@ fn prompt_ping_url(
 }
 
 pub async fn background(tv: &str) -> Result<()> {
-    let mut config = Config::load(tv, false)?;
+    let previous = Config::load(tv, false)?;
+    let mut config = previous.clone();
     println!("Background features are optional. This computer must stay awake to run them.");
     println!("Home watching redirects the Home button and keeps the TV's app list current.");
     let watch = confirm("Enable Home watching? [y/N] ")?;
@@ -275,7 +276,9 @@ pub async fn background(tv: &str) -> Result<()> {
         println!("The period sets the expected ping interval; grace allows a delay before an alert. Ping URLs cannot configure or verify notification destinations.");
         monitoring_ready = confirm("Is the integration enabled for these checks, and did you receive its test notification? [y/N] ")?;
         if !monitoring_ready {
-            println!("Continuing without Healthchecks alerts. To add them later, stop this TV's jobs with uninstall and rerun background.");
+            println!(
+                "Continuing without Healthchecks alerts. To add them later, rerun background."
+            );
         }
     }
     for (enabled, key, label) in [
@@ -289,21 +292,11 @@ pub async fn background(tv: &str) -> Result<()> {
             config.values.remove(key);
         }
     }
+    crate::background::apply(&previous, &config).await?;
     if previous_alerts.iter().any(|key| config.get(key).is_none()) {
         println!("Pause the disabled checks in Healthchecks.io to avoid missed-ping alerts.");
     }
-    config.configure(true)?;
-    if renew {
-        println!("Checking Developer Mode renewal before scheduling it.");
-        crate::renew::run(&config).await?;
-    }
-    if watch {
-        let mut peer = crate::tv::connect(&config, true).await?;
-        peer.close().await;
-        let template = Package::read(package::bundled())?;
-        crate::inventory::update(&config, &template).await?;
-    }
-    crate::install::install(&config).await
+    Ok(())
 }
 
 #[cfg(test)]
