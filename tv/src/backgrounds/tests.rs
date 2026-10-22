@@ -27,6 +27,49 @@ impl Drop for Temp {
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
+
+#[test]
+#[cfg(target_os = "linux")]
+fn read_only_storage_falls_back_and_restores_the_cached_manifest() {
+    let temporary = Temp::new();
+    // sysfs is read-only even for root in the build/preview container.
+    let mut store = Store::open(
+        PathBuf::from("/sys/kernel"),
+        None,
+        Some(temporary.0.join("fallback")),
+    )
+    .unwrap();
+    assert_eq!(store.root, temporary.0.join("fallback"));
+    assert!(Store::open(PathBuf::from("/sys/kernel"), None, None).is_err());
+    let manifest = store.manifest.clone();
+    store.manifest.photos[0].title = "Cached manifest".into();
+    std::fs::write(
+        store.root.join("manifest.json"),
+        serde_json::to_vec(&store.manifest).unwrap(),
+    )
+    .unwrap();
+    let reopened = Store::open(PathBuf::from("/sys/kernel"), None, Some(store.root)).unwrap();
+    assert_eq!(reopened.manifest.photos[0].title, "Cached manifest");
+    assert_eq!(reopened.manifest.photos.len(), manifest.photos.len());
+}
+
+#[test]
+fn writable_app_cache_is_preferred_and_invalid_paths_do_not_silently_fall_back() {
+    let temp = Temp::new();
+    let app = temp.0.join("app");
+    let fallback = temp.0.join("fallback");
+    assert_eq!(
+        Store::open(app.clone(), None, Some(fallback.clone()))
+            .unwrap()
+            .root,
+        app
+    );
+    assert!(!fallback.exists());
+    let invalid = temp.0.join("file");
+    std::fs::write(&invalid, b"not a directory").unwrap();
+    assert!(Store::open(invalid, None, Some(fallback.clone())).is_err());
+    assert!(!fallback.exists());
+}
 struct Server {
     base: String,
     stop: Arc<AtomicBool>,

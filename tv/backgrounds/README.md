@@ -44,12 +44,17 @@ photo and newly downloaded replacement are protected from eviction. Cache files
 live under the installed app's `state/backgrounds/` directory, separately on each
 TV. The last displayed photo returns on restart, including offline.
 
+If LG leaves the app folder unwritable after an update, Home uses
+`/tmp/com.anant.tvhome.native-backgrounds/` with the same cache limits. That
+fallback survives an app restart but is cleared by a TV reboot. It uses temporary
+memory-backed storage; it does not change system permissions or mounts.
+
 The versioned photo URLs point at the `backgrounds-v1` GitHub release. Home checks
 the small manifest on `main` at most daily while preparing photos. A failed
 manifest or photo is retried after 15 minutes. Failed photos are skipped; the
 current image remains until a verified alternative is ready. If none has ever
 been cached, the canvas stays black. HTTP errors are never saved as photos.
-Deleting Home removes its cache.
+Deleting Home removes its app-folder cache; a temporary fallback clears on reboot.
 
 ## Preparing and publishing photos
 

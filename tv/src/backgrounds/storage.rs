@@ -141,6 +141,33 @@ fn trusted_redirect(url: &reqwest::Url) -> bool {
         )
 }
 impl Store {
+    pub fn open(
+        root: PathBuf,
+        preview_base: Option<String>,
+        fallback: Option<PathBuf>,
+    ) -> Result<Self> {
+        match Self::new(root, preview_base.clone()) {
+            Ok(store) => Ok(store),
+            Err(error) => {
+                let denied = error.chain().any(|cause| {
+                    cause.downcast_ref::<std::io::Error>().is_some_and(|e| {
+                        matches!(
+                            e.kind(),
+                            std::io::ErrorKind::PermissionDenied
+                                | std::io::ErrorKind::ReadOnlyFilesystem
+                        )
+                    })
+                });
+                if denied {
+                    if let Some(path) = fallback {
+                        tracing::warn!(%error, path = %path.display(), "App storage is unwritable; photos use a temporary cache cleared on reboot");
+                        return Self::new(path, preview_base);
+                    }
+                }
+                Err(error)
+            }
+        }
+    }
     pub fn new(root: PathBuf, preview_base: Option<String>) -> Result<Self> {
         if let Some(base) = &preview_base {
             let url = reqwest::Url::parse(base)?;
@@ -153,6 +180,17 @@ impl Store {
             );
         }
         std::fs::create_dir_all(&root)?;
+        // An existing directory can become unwritable after an LG app update.
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_nanos();
+        let probe = root.join(format!(".write-check-{}-{nonce}", std::process::id()));
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&probe)?;
+        drop(file);
+        std::fs::remove_file(probe)?;
         let seed = Manifest::seed();
         let cached = std::fs::read(root.join("manifest.json"))
             .ok()
