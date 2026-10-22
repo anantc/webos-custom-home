@@ -3,6 +3,7 @@ mod backgrounds;
 mod catalog;
 mod city;
 mod gl;
+mod idle;
 mod model;
 mod platform;
 mod preferences;
@@ -697,6 +698,7 @@ fn main() -> Result<()> {
     let mut ui = Ui::new(catalog.apps.len());
     let mut dirty = true;
     let mut focused = true;
+    let mut dimmer = idle::Dimmer::new(Instant::now(), preview);
     let mut input_at: Option<Instant> = None;
     let mut clock = platform::time_label();
     let mut date = platform::clock(c"%A, %e %B");
@@ -731,6 +733,7 @@ fn main() -> Result<()> {
             canvas,
             &render::Frame {
                 background: backgrounds.view(),
+                dim_alpha: 0.0,
                 catalog: &catalog,
                 selected: 0,
                 status: false,
@@ -775,6 +778,7 @@ fn main() -> Result<()> {
             if cursor::is_notification(&event) {
                 continue;
             }
+            dirty |= dimmer.input(&event, Instant::now());
             let previous_target = ui.focus_target();
             let previous_panel = ui.panel;
             let navigation = matches!(
@@ -1064,6 +1068,7 @@ fn main() -> Result<()> {
             dirty |= wifi_monitor.finish(status, Instant::now());
         }
         let now = Instant::now();
+        dirty |= dimmer.tick(now, focused);
         dirty |= wifi_monitor.expire(now);
         dirty |= weather_monitor.tick(focused);
         dirty |= backgrounds.tick(now, focused);
@@ -1111,7 +1116,8 @@ fn main() -> Result<()> {
                 dirty = true;
             }
         }
-        let animating = backgrounds.animating()
+        let animating = dimmer.animating()
+            || backgrounds.animating()
             || ui.moving.is_some()
             || ui.scroll.active()
             || ui.scales.iter().any(Tween::active)
@@ -1136,6 +1142,7 @@ fn main() -> Result<()> {
                 graphics.surface(size.0, size.1)?.canvas(),
                 &render::Frame {
                     background: backgrounds.view(),
+                    dim_alpha: dimmer.alpha(),
                     catalog: &catalog,
                     selected: ui.selected,
                     status: ui.header == Some(Header::Controls),

@@ -43,8 +43,15 @@ webOS-specific scancode.
 
 LG owns the idle timer and screensaver activation. After creating its window,
 Home calls SDL's `enable_screen_saver` to release SDL's default inhibition.
-SDL's webOS backend handles LG's screensaver permission requests. Home has no
-custom inactivity timer or activation calls.
+SDL's webOS backend handles LG's screensaver permission requests.
+
+Home's own inactivity dimmer fades its rendered surface to 30% brightness after
+five minutes, over 600 ms. It restores immediately on remote keys, clicks, wheel
+input or pointer movement, including movement outside any control. LG cursor
+notifications and repaint/data updates do not reset this timer. Returning to
+Home starts a fresh interval. The dimmer draws a black overlay over the whole
+frame; it does not change panel brightness or activate/inhibit LG's screensaver.
+Once the fade finishes, it does not keep rendering extra frames.
 
 LG sends cursor visibility as raw key codes 1198 (show) and 1199 (hide).
 They describe the compositor's state and may have no key-up. Home enables the

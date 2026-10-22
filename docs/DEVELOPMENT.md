@@ -144,6 +144,12 @@ Open [the local preview](http://127.0.0.1:6081/vnc.html?autoconnect=1&resize=sca
 It displays example apps on a virtual 1080p screen. Arrows, Return, Escape and
 pointer input work through VNC. Stop with Ctrl+C.
 
+For a quick inactivity-dimming check, run
+`TVHOME_PREVIEW_DIM_SECONDS=5 ./tv/dev.sh preview`. This shortens only the
+emulator's timeout; TV builds always wait five minutes. Leave the pointer still,
+check that the whole screen dims, then move it over empty space or press an arrow
+to restore brightness. Clock, weather and photo updates should not wake it.
+
 VNC does not carry navigation sound. Software-rendered preview timings do not
 represent TV GPU performance. [TV app internals](../tv/README.md) describes
 instrumentation and Wi-Fi fixtures.

@@ -13,6 +13,7 @@ const FOCUS_INK: Color = Color::from_rgb(24, 25, 30);
 
 pub struct Frame<'a> {
     pub background: crate::backgrounds::View<'a>,
+    pub dim_alpha: f32,
     pub catalog: &'a Catalog,
     pub selected: usize,
     pub status: bool,
@@ -607,6 +608,11 @@ impl Renderer {
                 Color::from_rgb(180, 210, 195),
                 false,
             );
+        }
+        if f.dim_alpha > 0.0 {
+            let mut shade = paint(Color::BLACK);
+            shade.set_alpha_f(f.dim_alpha);
+            canvas.draw_rect(Rect::from_wh(1920.0, 1080.0), &shade);
         }
         canvas.restore();
     }

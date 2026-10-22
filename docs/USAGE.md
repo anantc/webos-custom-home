@@ -19,6 +19,12 @@ The settings menu offers **Inputs**, **TV settings** and **Exit**. Back closes a
 panel; from Inputs, it returns to the settings menu. Back on the app grid or
 holding Back exits Home.
 
+After five minutes without remote or pointer input, Home fades to 30% brightness.
+Moving the pointer or pressing a button restores full brightness immediately;
+the same input still performs its usual action. Returning from another app also
+starts Home at full brightness. This dims Home's display without changing the
+TV's picture settings. LG's screensaver can still start normally.
+
 ## Reorder tiles
 
 Select an app or pinned input and hold **OK** for about a second. The tiles
