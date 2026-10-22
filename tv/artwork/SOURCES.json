@@ -18,5 +18,14 @@
     "note": "Adapted publisher artwork for this launcher; not covered by the repository MIT license.",
     "original": "originals/zee5.jpg",
     "edit": "Background edges cleaned and gradient extended using built-in image_gen; restored to 512x512. ZEE5 mark reduced for breathing room in the wide tile. Prompts: EDIT-PROMPTS.json."
+  },
+  {
+    "file": "lg-channels.png",
+    "publisher_app": "LG Channels",
+    "source": "webOS launch-point largeIcon for com.webos.app.lgchannels",
+    "retrieved": "2026-10-22",
+    "note": "Adapted publisher artwork for this launcher; not covered by the repository MIT license.",
+    "original": "originals/lg-channels.png",
+    "edit": "Extended the official TV icon into a wide red tile with built-in image_gen, preserving the full logo and text. Prompt: EDIT-PROMPTS.json."
   }
 ]
