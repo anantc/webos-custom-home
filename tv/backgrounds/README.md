@@ -3,11 +3,15 @@
 The TV downloads reviewed 1920×1080 JPEGs from this project's GitHub release
 assets. The package embeds only `manifest.json`, so the first launch needs an
 internet connection for its first photo. Each photo includes its photographer,
-Unsplash source page and license. The screen displays the photographer credit.
+Unsplash source page and license. The screen displays its Unsplash caption, when
+available, followed by the photographer credit. Captions are short excerpts of
+the public photo page's `ImageObject.caption`, capped at 160 characters and 25
+words; they are separate from our curated `title`. Longer excerpts end in an
+ellipsis, and the renderer shortens them further if needed to fit the screen.
 
 ## Calendar and rotation
 
-The TV's local date selects the collection. These are Indian seasonal ranges,
+The TV's local date selects a tag. These are Indian seasonal ranges,
 independent of the weather city: February–March spring, April–May summer,
 June–September monsoon, October–November autumn, December–January winter.
 
@@ -38,9 +42,13 @@ requests and leave LG's screensaver policy untouched.
 ## Download and cache
 
 A worker downloads, verifies SHA-256 and decodes photos before they reach the
-renderer. Current, previous (during a fade) and next images are the only decoded
-photos retained. The JPEG cache holds at most 12 photos / 32 MiB; the displayed
-photo and newly downloaded replacement are protected from eviction. Cache files
+renderer. Home keeps the displayed photo and one ready for the next transition.
+After the crossfade finishes, it fetches the next replacement. Only after that
+photo has downloaded, passed verification and been saved does it delete the old
+photo. Failed downloads leave the existing photos intact. A completed cache holds
+two JPEGs; a third can exist briefly while saving the replacement. Each JPEG is
+limited to 4 MiB. The next decode waits until the crossfade has released the old
+image, keeping at most two decoded photos. Cache files
 live under the installed app's `state/backgrounds/` directory, separately on each
 TV. The last displayed photo returns on restart, including offline.
 
@@ -49,9 +57,13 @@ If LG leaves the app folder unwritable after an update, Home uses
 fallback survives an app restart but is cleared by a TV reboot. It uses temporary
 memory-backed storage; it does not change system permissions or mounts.
 
-The versioned photo URLs point at the `backgrounds-v1` GitHub release. Home checks
-the small manifest on `main` at most daily while preparing photos. A failed
-manifest or photo is retried after 15 minutes. Failed photos are skipped; the
+The photo URLs and remotely fetched `manifest.json` point at the `backgrounds-v1`
+GitHub release. Home checks the manifest on startup, then when preparing a photo
+if at least 15 minutes have elapsed. With ten-minute rotation, this normally
+means a check every 20 minutes while Home is visible. Returning from another app
+resumes rotation and these checks. The app uses a saved manifest, or its bundled
+seed, if the remote copy is unavailable or invalid. No photos are bundled.
+A failed manifest or photo is retried after 15 minutes. Failed photos are skipped; the
 current image remains until a verified alternative is ready. If none has ever
 been cached, the canvas stays black. HTTP errors are never saved as photos.
 Deleting Home removes its app-folder cache; a temporary fallback clears on reboot.
@@ -61,6 +73,20 @@ Deleting Home removes its app-folder cache; a temporary fallback clears on reboo
 `selection.json` is the reviewed source list, including the replacement SP2.
 Only free photos under the [Unsplash License](https://unsplash.com/license) belong
 here. This collection supports the launcher; it is not a stock-photo service.
+
+Each entry has a `tags` array. Selection recognizes `spring`, `summer`, `monsoon`,
+`autumn`, `winter`, `diwali`, `halloween`, `christmas`, `thanksgiving` and `holi`.
+A photo may have multiple selection tags, for example `["winter", "christmas"]`.
+Other descriptive tags are allowed but do not select a photo by themselves;
+every entry needs at least one recognized tag. Keep 1–12 photos per recognized
+tag. The same JPEG can belong to several groups without being downloaded twice.
+The optional `caption` is shown alongside `author`; omit it if the source has
+no caption. `title` is an editorial label used in the credits file.
+
+The manifest also carries the Diwali/Holi date windows, photo URLs, checksums,
+credits and tags. Updating these fields and publishing a new revision changes
+the TV's lineup without an application build or installation. New tag meanings
+would need application code; changing photos assigned to existing tags does not.
 
 From the repository root:
 
@@ -74,19 +100,18 @@ refuses silently changed source images. To deliberately change the selection or
 calendar, review the sources and run `--update`; this writes a new manifest
 revision to `tv/backgrounds/manifest.json`. Review that diff with the new images.
 
-Before releasing an app with new photos, upload the new content-addressed JPEGs
-and `CREDITS.txt` to the `backgrounds-v1` release using GitHub's release editor or
-`gh release upload`. Create that asset release the first time. Keep it marked as
-not the latest application release. Never replace/delete a JPEG that an existing
-manifest references. Publish the manifest on `main` only after its new assets are
-available; update the release's manifest and SHA256SUMS for auditing too.
-The ordinary application build neither downloads nor bundles these JPEGs.
+Commit the selection, calendar and generated manifest to `main`. The **Publish
+background photos** workflow fetches and verifies the reviewed JPEGs, uploads any
+new files, updates credits/checksums, and replaces the remote manifest last. That
+order ensures all photos exist before TVs see the new lineup. Check that the
+workflow succeeds; a source commit alone does not update the live manifest.
 
-The initial `backgrounds-v1` tag, and photo-manifest or publishing changes on
-`main`, run the **Publish background photos** workflow.
-It fetches the approved source images, checks every hash against the reviewed
-manifest, and publishes the complete asset set without changing the latest app
-release. A rerun skips identical assets and refuses to overwrite different bytes.
+The workflow also runs for the initial `backgrounds-v1` tag or a manual dispatch.
+It skips identical assets and refuses to overwrite different JPEG bytes. Never
+replace/delete a JPEG referenced by an existing manifest; changed photos get new
+content-addressed filenames. Metadata can be replaced. The asset release remains
+separate from the latest application release, and the ordinary application build
+neither downloads nor bundles these JPEGs.
 
 ## Preview and validation
 

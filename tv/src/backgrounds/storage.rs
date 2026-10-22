@@ -10,17 +10,20 @@ use std::{
 };
 
 pub const MANIFEST_URL: &str =
-    "https://raw.githubusercontent.com/anantc/webos-custom-home/main/tv/backgrounds/manifest.json";
+    "https://github.com/anantc/webos-custom-home/releases/download/backgrounds-v1/manifest.json";
 const ASSET_PREFIX: &str =
     "https://github.com/anantc/webos-custom-home/releases/download/backgrounds-v1/";
 const MAX_IMAGE: usize = 4 * 1024 * 1024;
 const MAX_MANIFEST: usize = 256 * 1024;
+const MANIFEST_REFRESH: Duration = Duration::from_secs(900);
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Photo {
     pub id: String,
-    pub collection: String,
+    pub tags: Vec<String>,
     pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption: Option<String>,
     pub author: String,
     pub source: String,
     pub license: String,
@@ -28,6 +31,11 @@ pub struct Photo {
     pub sha256: String,
     pub bytes: usize,
     pub url: String,
+}
+impl Photo {
+    pub fn matches_tag(&self, tag: &str) -> bool {
+        self.tags.iter().any(|t| t == tag)
+    }
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Manifest {
@@ -41,7 +49,7 @@ impl Manifest {
         ensure!(bytes.len() <= MAX_MANIFEST, "Manifest too large");
         let m: Self = serde_json::from_slice(bytes)?;
         ensure!(
-            m.version == 1 && m.revision > 0,
+            m.version == 2 && m.revision > 0,
             "Unsupported background manifest"
         );
         ensure!(
@@ -57,9 +65,18 @@ impl Manifest {
                     && p.id.bytes().all(|c| c.is_ascii_alphanumeric()),
                 "Invalid photo ID"
             );
+            let mut tags = HashSet::new();
             ensure!(
-                COLLECTIONS.contains(&p.collection.as_str()),
-                "Unknown collection"
+                !p.tags.is_empty()
+                    && p.tags.len() <= 16
+                    && p.tags.iter().all(|t| {
+                        !t.is_empty()
+                            && t.len() <= 32
+                            && t.bytes().all(|c| c.is_ascii_lowercase() || c == b'-')
+                            && tags.insert(t)
+                    })
+                    && COLLECTIONS.iter().any(|t| p.matches_tag(t)),
+                "Invalid photo tags or missing season/holiday tag"
             );
             ensure!(
                 p.sha256.len() == 64
@@ -80,7 +97,12 @@ impl Manifest {
             ensure!(
                 !p.author.is_empty()
                     && p.author.chars().count() <= 100
-                    && p.title.chars().count() <= 160,
+                    && p.title.chars().count() <= 160
+                    && p.caption.as_ref().is_none_or(|c| {
+                        !c.trim().is_empty()
+                            && c.chars().count() <= 160
+                            && !c.chars().any(char::is_control)
+                    }),
                 "Invalid credit"
             );
             ensure!(
@@ -91,7 +113,7 @@ impl Manifest {
         }
         for c in COLLECTIONS {
             ensure!(
-                (1..=12).contains(&m.photos.iter().filter(|p| p.collection == c).count()),
+                (1..=12).contains(&m.photos.iter().filter(|p| p.matches_tag(c)).count()),
                 "Missing or oversized collection: {c}"
             );
         }
@@ -196,14 +218,6 @@ impl Store {
             .ok()
             .and_then(|b| Manifest::parse(&b).ok())
             .filter(|m| m.revision >= seed.revision);
-        let refresh_after = if cached.is_some() {
-            std::fs::metadata(root.join("manifest.json"))
-                .and_then(|m| m.modified())
-                .unwrap_or(SystemTime::UNIX_EPOCH)
-                + Duration::from_secs(86400)
-        } else {
-            SystemTime::UNIX_EPOCH
-        };
         let client = reqwest::Client::builder()
             // The worker parks its runtime between photos; do not retain idle sockets.
             .pool_max_idle_per_host(0)
@@ -224,7 +238,7 @@ impl Store {
             client,
             preview_base,
             last_good: None,
-            refresh_after,
+            refresh_after: SystemTime::UNIX_EPOCH,
         })
     }
     async fn download(&self, url: &str, limit: usize) -> Result<Vec<u8>> {
@@ -243,13 +257,12 @@ impl Store {
         }
         Ok(bytes)
     }
-    pub async fn refresh(&mut self) -> Result<bool> {
-        let now = SystemTime::now();
+    pub async fn refresh(&mut self, now: SystemTime) -> Result<bool> {
         if now < self.refresh_after {
             return Ok(false);
         }
         // A failed origin is retried later; it never invalidates the last good manifest.
-        self.refresh_after = now + Duration::from_secs(900);
+        self.refresh_after = now + MANIFEST_REFRESH;
         let url = self
             .preview_base
             .as_ref()
@@ -264,7 +277,11 @@ impl Store {
         atomic(&self.root.join("manifest.json"), &bytes)?;
         let changed = manifest.revision != self.manifest.revision;
         self.manifest = manifest;
-        self.refresh_after = now + Duration::from_secs(86400);
+        tracing::info!(
+            revision = self.manifest.revision,
+            changed,
+            "Background manifest checked"
+        );
         Ok(changed)
     }
     fn decode(photo: &Photo, bytes: &[u8]) -> Result<skia_safe::Image> {
@@ -288,7 +305,11 @@ impl Store {
         crate::render::rgba_image(rgba.as_raw(), 1920, 1080)
     }
     pub fn restore(&mut self) -> Option<Loaded> {
-        let photo: Photo =
+        #[derive(Deserialize)]
+        struct SavedPhoto {
+            file: String,
+        }
+        let photo: SavedPhoto =
             serde_json::from_slice(&std::fs::read(self.root.join("last-good.json")).ok()?).ok()?;
         // Reuse only photos still present in the reviewed manifest, not arbitrary disk paths.
         let photo = self
@@ -314,6 +335,7 @@ impl Store {
         let path = self.root.join(&photo.file);
         if let Ok(bytes) = std::fs::read(&path) {
             if let Ok(image) = Self::decode(photo, &bytes) {
+                self.retain_pair(&photo.file);
                 return Ok(Loaded {
                     photo: photo.clone(),
                     image,
@@ -328,45 +350,29 @@ impl Store {
         let bytes = self.download(&url, MAX_IMAGE).await?;
         let image = Self::decode(photo, &bytes)?;
         atomic(&path, &bytes)?;
-        if let Err(error) = self.prune(&photo.file) {
-            tracing::warn!(%error,"Could not trim background cache");
-        }
+        self.retain_pair(&photo.file);
         Ok(Loaded {
             photo: photo.clone(),
             image,
         })
     }
-    fn prune(&self, keep: &str) -> Result<()> {
-        let mut files: Vec<_> = std::fs::read_dir(&self.root)?
-            .filter_map(|e| e.ok())
-            .filter_map(|e| {
-                let name = e.file_name().to_string_lossy().into_owned();
-                if !name.ends_with(".jpg") {
-                    return None;
+    fn retain_pair(&self, ready: &str) {
+        // Only called after verification and successful storage. A failed fetch
+        // leaves both existing photos intact, including the previous fallback.
+        let prune = || -> Result<()> {
+            for entry in std::fs::read_dir(&self.root)? {
+                let entry = entry?;
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name.ends_with(".jpg") && name != ready && self.last_good.as_ref() != Some(&name)
+                {
+                    std::fs::remove_file(entry.path())?;
                 }
-                let meta = e.metadata().ok()?;
-                Some((
-                    meta.modified().unwrap_or(SystemTime::UNIX_EPOCH),
-                    name,
-                    meta.len(),
-                ))
-            })
-            .collect();
-        files.sort_by_key(|(time, _, _)| *time);
-        let mut count = files.len();
-        let mut bytes: u64 = files.iter().map(|(_, _, n)| n).sum();
-        for (_, name, len) in files {
-            if count <= 12 && bytes <= 32 * 1024 * 1024 {
-                break;
             }
-            if name == keep || self.last_good.as_ref() == Some(&name) {
-                continue;
-            }
-            std::fs::remove_file(self.root.join(name))?;
-            count -= 1;
-            bytes -= len;
+            Ok(())
+        };
+        if let Err(error) = prune() {
+            tracing::warn!(%error,"Could not discard old background photos");
         }
-        Ok(())
     }
 }
 fn atomic(path: &Path, bytes: &[u8]) -> Result<()> {
@@ -400,7 +406,7 @@ impl Bag {
         if self.remaining.is_empty() {
             self.remaining = photos
                 .iter()
-                .filter(|p| p.collection == collection)
+                .filter(|p| p.matches_tag(collection))
                 .map(|p| p.id.clone())
                 .collect();
             for i in (1..self.remaining.len()).rev() {
@@ -418,7 +424,7 @@ impl Bag {
             if id != exclude {
                 if let Some(p) = photos
                     .iter()
-                    .find(|p| p.id == id && p.collection == collection)
+                    .find(|p| p.id == id && p.matches_tag(collection))
                 {
                     return Ok(p.clone());
                 }

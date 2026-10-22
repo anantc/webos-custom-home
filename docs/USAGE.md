@@ -40,12 +40,18 @@ Diwali, Holi, Halloween, Christmas and Thanksgiving collections appear around
 those holidays. Seasons follow the Indian calendar; changing the weather city
 does not change the background schedule.
 
-The TV downloads photos as needed and keeps a small local cache. The last photo
+The TV keeps the displayed photo and one ready for the next transition. After
+switching, it downloads a replacement before discarding the old photo. The last photo
 stays visible if a download fails and returns after restarting Home even without
 an internet connection. If LG prevents saving in the app folder after an update,
 Home uses a temporary cache that clears when the TV fully reboots. A first launch
-without a downloaded photo has a black background. The photographer is credited
-at the bottom of the screen.
+without a downloaded photo has a black background. The photo's Unsplash caption
+and photographer credit appear at the bottom of the screen.
+
+Home downloads the photo lineup separately, so new photos, captions and holiday
+dates can arrive without reinstalling the app. It checks on startup and roughly
+every 20 minutes while rotating photos. If that check fails, it keeps the last
+usable lineup.
 
 ## Screensaver
 

@@ -36,11 +36,11 @@ async function main() {
       url: `https://github.com/anantc/webos-custom-home/releases/download/backgrounds-v1/${file}` });
     console.log(`${photo.id} ${Math.round(bytes.length / 1024)} KiB`);
   }
-  const manifest = { version: 1, revision: update ? Math.max(1, (previous?.revision || 0) + 1) : previous.revision, holidays, photos };
+  const manifest = { version: 2, revision: update ? Math.max(1, (previous?.revision || 0) + 1) : previous.revision, holidays, photos };
   const json = JSON.stringify(manifest, null, 2) + '\n';
   await fs.writeFile(path.join(out, 'manifest.json'), json);
   if (update) await fs.writeFile(manifestPath, json);
-  const credits = photos.map(p => `${p.id} — ${p.title}\nPhoto by ${p.author} on Unsplash\n${p.source}\nLicense: ${p.license}\n`).join('\n');
+  const credits = photos.map(p => `${p.id} — ${p.title}\n${p.caption ? `Caption: ${p.caption}\n` : ''}Photo by ${p.author} on Unsplash\n${p.source}\nLicense: ${p.license}\n`).join('\n');
   await fs.writeFile(path.join(out, 'CREDITS.txt'), credits);
   await fs.writeFile(path.join(out, 'SHA256SUMS'), photos.map(p => `${p.sha256}  ${p.file}\n`).join(''));
   console.log(`Prepared ${photos.length} photos in ${out}`);

@@ -122,7 +122,7 @@ impl Monitor {
                             }
                         }
                         Command::Load(collection, exclude) => {
-                            match runtime.block_on(store.refresh()) {
+                            match runtime.block_on(store.refresh(SystemTime::now())) {
                                 Ok(true) => {
                                     failed.clear();
                                     bag =
@@ -141,7 +141,7 @@ impl Monitor {
                                 .manifest
                                 .photos
                                 .iter()
-                                .filter(|p| p.collection == collection)
+                                .filter(|p| p.matches_tag(&collection))
                                 .count();
                             for _ in 0..attempts {
                                 let Ok(photo) =
@@ -211,7 +211,7 @@ impl Monitor {
         self.previous.is_some() && self.fade < FADE
     }
     fn show(&mut self, loaded: Loaded) {
-        tracing::info!(id=%loaded.photo.id,collection=%loaded.photo.collection,"Background displayed");
+        tracing::info!(id=%loaded.photo.id,tags=?loaded.photo.tags,"Background displayed");
         let _ = self
             .requests
             .try_send(Command::Displayed(loaded.photo.clone()));
@@ -238,6 +238,21 @@ impl Monitor {
             match event {
                 Event::Manifest(manifest) => {
                     self.manifest = manifest;
+                    // Refresh captions/tags on decoded images without downloading them again.
+                    for loaded in [&mut self.current, &mut self.previous, &mut self.next]
+                        .into_iter()
+                        .flatten()
+                    {
+                        if let Some(photo) = self
+                            .manifest
+                            .photos
+                            .iter()
+                            .find(|p| p.file == loaded.photo.file)
+                        {
+                            loaded.photo = photo.clone();
+                        }
+                    }
+                    dirty = true;
                     self.calendar_at = now;
                 }
                 Event::Cached(loaded) => {
@@ -277,7 +292,8 @@ impl Monitor {
             self.calendar_at = now + Duration::from_secs(60);
         }
         if self.next.as_ref().is_some_and(|n| {
-            n.photo.collection != self.desired
+            !n.photo.matches_tag(&self.desired)
+                || !self.manifest.photos.iter().any(|p| p.file == n.photo.file)
                 || self
                     .current
                     .as_ref()
@@ -285,10 +301,10 @@ impl Monitor {
         }) {
             self.next = None;
         }
-        let change_collection = self
-            .current
-            .as_ref()
-            .is_some_and(|c| c.photo.collection != self.desired);
+        let change_collection = self.current.as_ref().is_some_and(|c| {
+            !c.photo.matches_tag(&self.desired)
+                || !self.manifest.photos.iter().any(|p| p.file == c.photo.file)
+        });
         if self.next.is_some()
             && (self.current.is_none() || change_collection || self.timer.elapsed >= self.interval)
             && !self.animating()
@@ -297,7 +313,8 @@ impl Monitor {
             self.show(next);
             dirty = true;
         }
-        if !self.pending && self.next.is_none() && now >= self.retry_at {
+        // Finish the two-image fade before decoding another replacement.
+        if !self.animating() && !self.pending && self.next.is_none() && now >= self.retry_at {
             let exclude = self
                 .current
                 .as_ref()

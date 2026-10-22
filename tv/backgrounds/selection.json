@@ -1,8 +1,11 @@
 [
   {
     "id": "SP1",
-    "collection": "spring",
+    "tags": [
+      "spring"
+    ],
     "title": "Blossoms over the lake",
+    "caption": "Cherry blossoms frame a tranquil lake on a clear day",
     "author": "Ryuta",
     "source": "https://unsplash.com/photos/cherry-blossoms-frame-a-tranquil-lake-on-a-clear-day-2R29wKpIWJ8",
     "license": "https://unsplash.com/license",
@@ -10,8 +13,11 @@
   },
   {
     "id": "SP2",
-    "collection": "spring",
+    "tags": [
+      "spring"
+    ],
     "title": "Bluebell woodland",
+    "caption": "A stunning carpet of bluebells blooming in the ancient woodlands of the Wye Valley, on the border of England and Wales. This springtime scene captures…",
     "author": "Rob Wingate",
     "source": "https://unsplash.com/photos/bluebells-bloom-beneath-the-lush-green-forest-canopy-QF2kkrpmx34",
     "license": "https://unsplash.com/license",
@@ -19,8 +25,11 @@
   },
   {
     "id": "SP3",
-    "collection": "spring",
+    "tags": [
+      "spring"
+    ],
     "title": "Pink blossom tunnel",
+    "caption": "A pathway lined with blooming pink cherry blossom trees",
     "author": "CLAR. S___UE_N",
     "source": "https://unsplash.com/photos/a-pathway-lined-with-blooming-pink-cherry-blossom-trees-bQLCdSo8Dn4",
     "license": "https://unsplash.com/license",
@@ -28,8 +37,11 @@
   },
   {
     "id": "SP4",
-    "collection": "spring",
+    "tags": [
+      "spring"
+    ],
     "title": "Sunlit green hills",
+    "caption": "Sunlight streams through rolling green hills at dawn",
     "author": "Alex Moliski",
     "source": "https://unsplash.com/photos/sunlight-streams-through-rolling-green-hills-at-dawn-YH6nkB_GfJM",
     "license": "https://unsplash.com/license",
@@ -37,8 +49,11 @@
   },
   {
     "id": "SP5",
-    "collection": "spring",
+    "tags": [
+      "spring"
+    ],
     "title": "Golden mist",
+    "caption": "Misty forest landscape at sunrise with rolling hills",
     "author": "Jonny Gios",
     "source": "https://unsplash.com/photos/misty-forest-landscape-at-sunrise-with-rolling-hills-7QHu7-TfJ6c",
     "license": "https://unsplash.com/license",
@@ -46,8 +61,11 @@
   },
   {
     "id": "SP6",
-    "collection": "spring",
+    "tags": [
+      "spring"
+    ],
     "title": "Rolling green countryside",
+    "caption": "Green rolling hills under a clear blue sky",
     "author": "Spencer DeMera",
     "source": "https://unsplash.com/photos/green-rolling-hills-under-a-clear-blue-sky-C1PDN6A8PPs",
     "license": "https://unsplash.com/license",
@@ -55,8 +73,11 @@
   },
   {
     "id": "SU1",
-    "collection": "summer",
+    "tags": [
+      "summer"
+    ],
     "title": "Open coast",
+    "caption": "Aerial shot of Emerald Isle, North Carolina coastline",
     "author": "Cody Moore",
     "source": "https://unsplash.com/photos/an-aerial-view-of-a-beach-and-ocean-hHR-RdSYQyc",
     "license": "https://unsplash.com/license",
@@ -64,8 +85,11 @@
   },
   {
     "id": "SU2",
-    "collection": "summer",
+    "tags": [
+      "summer"
+    ],
     "title": "Coastal shallows",
+    "caption": "Aerial photo of the remote western australia coastline showing off it's deep contrasting colours",
     "author": "Rod Long",
     "source": "https://unsplash.com/photos/aerial-view-of-a-sandy-coastline-with-shallow-turquoise-water-iqBc91jdqoQ",
     "license": "https://unsplash.com/license",
@@ -73,8 +97,11 @@
   },
   {
     "id": "SU3",
-    "collection": "summer",
+    "tags": [
+      "summer"
+    ],
     "title": "Turquoise bay",
+    "caption": "A stunning view of a curved beach bay with turquoise water and towering cliffs, capturing the untouched beauty of summer in nature.",
     "author": "Joana guarda",
     "source": "https://unsplash.com/photos/a-beautiful-turquoise-beach-nestled-between-cliffs-b7_9Vh5TGoc",
     "license": "https://unsplash.com/license",
@@ -82,8 +109,11 @@
   },
   {
     "id": "SU4",
-    "collection": "summer",
+    "tags": [
+      "summer"
+    ],
     "title": "Secluded cove",
+    "caption": "Aerial view of a secluded beach with clear turquoise water",
     "author": "Francesco Ungaro",
     "source": "https://unsplash.com/photos/aerial-view-of-a-secluded-beach-with-clear-turquoise-water-AHaIr6ED0cs",
     "license": "https://unsplash.com/license",
@@ -91,8 +121,11 @@
   },
   {
     "id": "SU5",
-    "collection": "summer",
+    "tags": [
+      "summer"
+    ],
     "title": "Dunes at sunset",
+    "caption": "Sunset over the ocean with sand dunes and fence",
     "author": "Philippe BONTEMPS",
     "source": "https://unsplash.com/photos/sunset-over-the-ocean-with-sand-dunes-and-fence-Xr06hVdkFu8",
     "license": "https://unsplash.com/license",
@@ -100,8 +133,11 @@
   },
   {
     "id": "SU6",
-    "collection": "summer",
+    "tags": [
+      "summer"
+    ],
     "title": "Where dunes meet the sea",
+    "caption": "Sand dunes meet the ocean under a clear blue sky",
     "author": "NIR HIMI",
     "source": "https://unsplash.com/photos/sand-dunes-meet-the-ocean-under-a-clear-blue-sky-hJKRf9_KbhU",
     "license": "https://unsplash.com/license",
@@ -109,8 +145,11 @@
   },
   {
     "id": "MO1",
-    "collection": "monsoon",
+    "tags": [
+      "monsoon"
+    ],
     "title": "Munnar tea gardens",
+    "caption": "Lush green rolling hills with scattered trees",
     "author": "Shubham Dhage",
     "source": "https://unsplash.com/photos/lush-green-rolling-hills-with-scattered-trees-eaAewSWaoiE",
     "license": "https://unsplash.com/license",
@@ -118,8 +157,11 @@
   },
   {
     "id": "MO2",
-    "collection": "monsoon",
+    "tags": [
+      "monsoon"
+    ],
     "title": "Rainforest waterfall",
+    "caption": "A hidden waterfall emerging from the heart of a lush tropical rainforest, partially veiled by mystical morning mist. A cinematic aerial perspective…",
     "author": "Tropic Alizé",
     "source": "https://unsplash.com/photos/waterfall-cascading-through-a-lush-green-forest-shrouded-in-mist-5VsWgZ4gOGw",
     "license": "https://unsplash.com/license",
@@ -127,8 +169,11 @@
   },
   {
     "id": "MO3",
-    "collection": "monsoon",
+    "tags": [
+      "monsoon"
+    ],
     "title": "Green valley and waterfalls",
+    "caption": "a lush green hillside with a waterfall in the distance",
     "author": "Maria Miguel Cardeiro",
     "source": "https://unsplash.com/photos/a-lush-green-hillside-with-a-waterfall-in-the-distance-CxOQClHblAk",
     "license": "https://unsplash.com/license",
@@ -136,8 +181,11 @@
   },
   {
     "id": "MO4",
-    "collection": "monsoon",
+    "tags": [
+      "monsoon"
+    ],
     "title": "Nashik in the mist",
+    "caption": "A dramatic waterfall cascading through lush green mountains, wrapped in thick mist and monsoon clouds, capturing the raw beauty and quiet intensity of a…",
     "author": "Piyanshu Sharma",
     "source": "https://unsplash.com/photos/a-waterfall-in-the-middle-of-a-lush-green-forest-sBc1pYlufUQ",
     "license": "https://unsplash.com/license",
@@ -145,8 +193,11 @@
   },
   {
     "id": "MO5",
-    "collection": "monsoon",
+    "tags": [
+      "monsoon"
+    ],
     "title": "Cloud-wrapped cliffs",
+    "caption": "This is a photo captured right after the rains. The clouds have descended upon the mountains and the entire mountaiside is covered in a carpet…",
     "author": "abhijeet nadkarni",
     "source": "https://unsplash.com/photos/misty-mountains-covered-in-lush-green-forest-qU4m4ImmbCo",
     "license": "https://unsplash.com/license",
@@ -154,8 +205,11 @@
   },
   {
     "id": "MO6",
-    "collection": "monsoon",
+    "tags": [
+      "monsoon"
+    ],
     "title": "Misty green hills",
+    "caption": "Misty green hills at Nathula Pass near Gangtok, Sikkim, where clouds drift over high-altitude terrain, revealing a quiet mountain settlement amid the…",
     "author": "Rudra Gupta",
     "source": "https://unsplash.com/photos/green-misty-mountains-with-a-small-village-nuWdbq4q0-M",
     "license": "https://unsplash.com/license",
@@ -163,8 +217,11 @@
   },
   {
     "id": "AU1",
-    "collection": "autumn",
+    "tags": [
+      "autumn"
+    ],
     "title": "Still mountain lake",
+    "caption": "Tranquil Mountain Lake Reflection",
     "author": "Ahmet Yüksek ✪",
     "source": "https://unsplash.com/photos/calm-lake-reflecting-autumn-trees-and-mountains-eNJ1VwmhUHg",
     "license": "https://unsplash.com/license",
@@ -172,8 +229,11 @@
   },
   {
     "id": "AU2",
-    "collection": "autumn",
+    "tags": [
+      "autumn"
+    ],
     "title": "Morning mist over water",
+    "caption": "A serene autumn morning scene featuring a small lake with a misty forest stretching into the distance. The towering mountain range looms in the background,…",
     "author": "Philipp",
     "source": "https://unsplash.com/photos/a-large-body-of-water-surrounded-by-a-lush-green-field-FZSz9YB0e90",
     "license": "https://unsplash.com/license",
@@ -181,8 +241,11 @@
   },
   {
     "id": "AU3",
-    "collection": "autumn",
+    "tags": [
+      "autumn"
+    ],
     "title": "Copper forest",
+    "caption": "Misty autumn forest on a mountainside",
     "author": "Jonas Degener",
     "source": "https://unsplash.com/photos/misty-autumn-forest-on-a-mountainside-zwHMq_8-BPw",
     "license": "https://unsplash.com/license",
@@ -190,8 +253,11 @@
   },
   {
     "id": "AU4",
-    "collection": "autumn",
+    "tags": [
+      "autumn"
+    ],
     "title": "Golden alpine reflections",
+    "caption": "Autumn forest reflected in a clear mountain lake",
     "author": "Maximilian Brand",
     "source": "https://unsplash.com/photos/autumn-forest-reflected-in-a-clear-mountain-lake-I-FDQDDHekY",
     "license": "https://unsplash.com/license",
@@ -199,8 +265,11 @@
   },
   {
     "id": "AU5",
-    "collection": "autumn",
+    "tags": [
+      "autumn"
+    ],
     "title": "Road through amber woods",
+    "caption": "A winding country road carves through a golden autumn forest - fallen leaves carpet the roadside while the curved asphalt leads the eye into a…",
     "author": "Mikhail Mamaev",
     "source": "https://unsplash.com/photos/a-winding-road-through-an-autumn-forest-9BJJ3Azb52g",
     "license": "https://unsplash.com/license",
@@ -208,8 +277,11 @@
   },
   {
     "id": "AU6",
-    "collection": "autumn",
+    "tags": [
+      "autumn"
+    ],
     "title": "Autumn switchbacks",
+    "caption": "Winding through a golden sea of fall foliage, this mountain road beckons adventurers to chase the horizon. Captured from above, the switchbacks twist like…",
     "author": "Ken Cheung",
     "source": "https://unsplash.com/photos/winding-mountain-road-through-autumn-forest-nquDzTJX90E",
     "license": "https://unsplash.com/license",
@@ -217,8 +289,11 @@
   },
   {
     "id": "WI1",
-    "collection": "winter",
+    "tags": [
+      "winter"
+    ],
     "title": "Snowy pines",
+    "caption": "a snowy landscape with trees and mountains in the background",
     "author": "Ryan Klaus",
     "source": "https://unsplash.com/photos/a-snowy-landscape-with-trees-and-mountains-in-the-background-3niSyUkD7lc",
     "license": "https://unsplash.com/license",
@@ -226,8 +301,11 @@
   },
   {
     "id": "WI2",
-    "collection": "winter",
+    "tags": [
+      "winter"
+    ],
     "title": "Peak through the trees",
+    "caption": "Snow-capped mountain peak seen through pine trees",
     "author": "ekrem osmanoglu",
     "source": "https://unsplash.com/photos/snow-capped-mountain-peak-seen-through-pine-trees-78_MVpSp-fw",
     "license": "https://unsplash.com/license",
@@ -235,8 +313,11 @@
   },
   {
     "id": "WI3",
-    "collection": "winter",
+    "tags": [
+      "winter"
+    ],
     "title": "Frosted forest",
+    "caption": "The image shows a serene winter landscape in the mountains. Tall evergreen trees are heavily covered with fresh, white snow, standing on a sloping hillside…",
     "author": "Pascal Debrunner",
     "source": "https://unsplash.com/photos/snow-covered-pine-trees-on-a-mountain-slope-lUVIA5mjqfo",
     "license": "https://unsplash.com/license",
@@ -244,8 +325,11 @@
   },
   {
     "id": "WI4",
-    "collection": "winter",
+    "tags": [
+      "winter"
+    ],
     "title": "Clear alpine morning",
+    "caption": "Snow-covered mountains and pine trees under a clear blue sky",
     "author": "Maksim Shutov",
     "source": "https://unsplash.com/photos/snow-covered-mountains-and-pine-trees-under-a-clear-blue-sky-j7tQzOIwbzo",
     "license": "https://unsplash.com/license",
@@ -253,8 +337,11 @@
   },
   {
     "id": "WI5",
-    "collection": "winter",
+    "tags": [
+      "winter"
+    ],
     "title": "Aurora over the forest",
+    "caption": "Bright green aurora borealis glowing above a snow covered forest at night",
     "author": "Andrea Pedruzzi",
     "source": "https://unsplash.com/photos/aurora-borealis-over-snowy-forest-ieMCj4mhTZI",
     "license": "https://unsplash.com/license",
@@ -262,8 +349,11 @@
   },
   {
     "id": "WI6",
-    "collection": "winter",
+    "tags": [
+      "winter"
+    ],
     "title": "Northern lights overhead",
+    "caption": "Aurora borealis over snow-covered trees at night",
     "author": "Wolfgang Hasselmann",
     "source": "https://unsplash.com/photos/aurora-borealis-over-snow-covered-trees-at-night-tlBWf1BZLzs",
     "license": "https://unsplash.com/license",
@@ -271,8 +361,11 @@
   },
   {
     "id": "DI1",
-    "collection": "diwali",
+    "tags": [
+      "diwali"
+    ],
     "title": "A diya against distant lights",
+    "caption": "As part of Diwali festival celebration, clay lamps are lit using cotton wicks dipped in Ghee or mustard oil.",
     "author": "Jyoti Singh",
     "source": "https://unsplash.com/photos/lighted-candle-in-black-round-container-evtL96IfR2E",
     "license": "https://unsplash.com/license",
@@ -280,8 +373,11 @@
   },
   {
     "id": "DI2",
-    "collection": "diwali",
+    "tags": [
+      "diwali"
+    ],
     "title": "Golden lanterns",
+    "caption": "Diwali lights",
     "author": "Ameya Purohit",
     "source": "https://unsplash.com/photos/lighted-lamps-s7KPASknOgo",
     "license": "https://unsplash.com/license",
@@ -289,8 +385,11 @@
   },
   {
     "id": "DI3",
-    "collection": "diwali",
+    "tags": [
+      "diwali"
+    ],
     "title": "A sea of diyas",
+    "caption": "This photograph captures a mesmerizing pattern of illuminated oil lamps arranged in a symmetrical formation, creating a warm and inviting glow.",
     "author": "Rahul Saraf",
     "source": "https://unsplash.com/photos/a-bunch-of-lit-candles-sitting-on-top-of-a-table-Pg_22ufOyR0",
     "license": "https://unsplash.com/license",
@@ -298,8 +397,11 @@
   },
   {
     "id": "DI4",
-    "collection": "diwali",
+    "tags": [
+      "diwali"
+    ],
     "title": "Rangoli by candlelight",
+    "caption": "a lit candle sitting on top of a red blanket",
     "author": "Suchandra Roy Chowdhury",
     "source": "https://unsplash.com/photos/a-lit-candle-sitting-on-top-of-a-red-blanket-VVKx67iYZT0",
     "license": "https://unsplash.com/license",
@@ -307,8 +409,11 @@
   },
   {
     "id": "DI5",
-    "collection": "diwali",
+    "tags": [
+      "diwali"
+    ],
     "title": "Diyas fading into the night",
+    "caption": "a row of lit candles sitting on top of a table",
     "author": "Rishabh dev",
     "source": "https://unsplash.com/photos/8SNcvld8fwQ",
     "license": "https://unsplash.com/license",
@@ -316,8 +421,11 @@
   },
   {
     "id": "HA1",
-    "collection": "halloween",
+    "tags": [
+      "halloween"
+    ],
     "title": "Jack-o’-lanterns after dark",
+    "caption": "Carved pumpkin as face",
     "author": "Beth Teutschmann",
     "source": "https://unsplash.com/photos/two-lighted-jack-o-lanterns-during-night-time-ed5KySP1tfQ",
     "license": "https://unsplash.com/license",
@@ -325,8 +433,11 @@
   },
   {
     "id": "HA2",
-    "collection": "halloween",
+    "tags": [
+      "halloween"
+    ],
     "title": "Hanging pumpkin lights",
+    "caption": "Many jack-o'-lanterns hanging in the dark",
     "author": "zero take",
     "source": "https://unsplash.com/photos/many-jack-o-lanterns-hanging-in-the-dark-QWgtd-yeUYU",
     "license": "https://unsplash.com/license",
@@ -334,8 +445,11 @@
   },
   {
     "id": "HA3",
-    "collection": "halloween",
+    "tags": [
+      "halloween"
+    ],
     "title": "Pumpkins at blue hour",
+    "caption": "two lighted jack-o'-lanterns",
     "author": "Najib Kalil",
     "source": "https://unsplash.com/photos/two-lighted-jack-o-lanterns-7T1EGy8HGE4",
     "license": "https://unsplash.com/license",
@@ -343,8 +457,11 @@
   },
   {
     "id": "HA4",
-    "collection": "halloween",
+    "tags": [
+      "halloween"
+    ],
     "title": "Pumpkins and porch lights",
+    "caption": "Pumpkins and glowing edison bulbs at dusk",
     "author": "Liana S",
     "source": "https://unsplash.com/photos/pumpkins-and-glowing-edison-bulbs-at-dusk-XHLDiGrT_Co",
     "license": "https://unsplash.com/license",
@@ -352,8 +469,11 @@
   },
   {
     "id": "HA5",
-    "collection": "halloween",
+    "tags": [
+      "halloween"
+    ],
     "title": "Tiny pumpkins in the branches",
+    "caption": "Several carved pumpkins glowing at night",
     "author": "Emanuel Haas",
     "source": "https://unsplash.com/photos/several-carved-pumpkins-glowing-at-night-0u9_deQ2q-M",
     "license": "https://unsplash.com/license",
@@ -361,8 +481,11 @@
   },
   {
     "id": "CH1",
-    "collection": "christmas",
+    "tags": [
+      "christmas"
+    ],
     "title": "Golden ornaments",
+    "caption": "Close-up of a decorated christmas tree with lights",
     "author": "Ingmar",
     "source": "https://unsplash.com/photos/close-up-of-a-decorated-christmas-tree-with-lights-PxnFFlMkwBs",
     "license": "https://unsplash.com/license",
@@ -370,8 +493,11 @@
   },
   {
     "id": "CH2",
-    "collection": "christmas",
+    "tags": [
+      "christmas"
+    ],
     "title": "Evergreen and fairy lights",
+    "caption": "Christmas trees decorated with lights outdoors",
     "author": "Eugenia Pan'kiv",
     "source": "https://unsplash.com/photos/christmas-trees-decorated-with-lights-outdoors-HvfV909eu5Y",
     "license": "https://unsplash.com/license",
@@ -379,8 +505,11 @@
   },
   {
     "id": "CH3",
-    "collection": "christmas",
+    "tags": [
+      "christmas"
+    ],
     "title": "Christmas lights in soft focus",
+    "caption": "Festive Lights Background",
     "author": "Tim Mossholder",
     "source": "https://unsplash.com/photos/blurred-christmas-tree-lights-in-the-dark-Wf5eio804e4",
     "license": "https://unsplash.com/license",
@@ -388,8 +517,11 @@
   },
   {
     "id": "CH4",
-    "collection": "christmas",
+    "tags": [
+      "christmas"
+    ],
     "title": "Snowy town at dusk",
+    "caption": "A peaceful winter evening settles over a snow-covered European village, where warm Christmas lights glow softly against the blue tones of dusk. In the…",
     "author": "Pascal Debrunner",
     "source": "https://unsplash.com/photos/snowy-town-with-church-steeple-at-dusk-3BmQiYQCQEw",
     "license": "https://unsplash.com/license",
@@ -397,8 +529,11 @@
   },
   {
     "id": "CH5",
-    "collection": "christmas",
+    "tags": [
+      "christmas"
+    ],
     "title": "Warm windows in the snow",
+    "caption": "Last Christmas - waiting for first star",
     "author": "Super Panel",
     "source": "https://unsplash.com/photos/2-house-in-snow-NXBFQdWR_c8",
     "license": "https://unsplash.com/license",
@@ -406,8 +541,11 @@
   },
   {
     "id": "TH1",
-    "collection": "thanksgiving",
+    "tags": [
+      "thanksgiving"
+    ],
     "title": "A slice of pumpkin pie",
+    "caption": "a slice of pumpkin pie on a plate",
     "author": "Diliara Garifullina",
     "source": "https://unsplash.com/photos/a-slice-of-pumpkin-pie-on-a-plate-7u_wURCg5rw",
     "license": "https://unsplash.com/license",
@@ -415,8 +553,11 @@
   },
   {
     "id": "TH2",
-    "collection": "thanksgiving",
+    "tags": [
+      "thanksgiving"
+    ],
     "title": "The harvest table",
+    "caption": "a table set for a thanksgiving dinner with pumpkins and gourds",
     "author": "Benigno Hoyuela",
     "source": "https://unsplash.com/photos/a-table-set-for-a-thanksgiving-dinner-with-pumpkins-and-gourds-W5_uXZh5E0M",
     "license": "https://unsplash.com/license",
@@ -424,8 +565,11 @@
   },
   {
     "id": "TH3",
-    "collection": "thanksgiving",
+    "tags": [
+      "thanksgiving"
+    ],
     "title": "Autumn on the porch",
+    "caption": "Autumn harvest decorations with pumpkins and gourds",
     "author": "Evgeniy Bezkorovayniy",
     "source": "https://unsplash.com/photos/autumn-harvest-decorations-with-pumpkins-and-gourds-LSkmgzttx88",
     "license": "https://unsplash.com/license",
@@ -433,8 +577,11 @@
   },
   {
     "id": "TH4",
-    "collection": "thanksgiving",
+    "tags": [
+      "thanksgiving"
+    ],
     "title": "Basket of red apples",
+    "caption": "a basket filled with lots of red apples",
     "author": "Julia Kicova",
     "source": "https://unsplash.com/photos/a-basket-filled-with-lots-of-red-apples-SQ5c4RZUKVE",
     "license": "https://unsplash.com/license",
@@ -442,8 +589,11 @@
   },
   {
     "id": "TH5",
-    "collection": "thanksgiving",
+    "tags": [
+      "thanksgiving"
+    ],
     "title": "Pumpkin patch at golden hour",
+    "caption": "Pumpkins in a field during golden hour",
     "author": "Elijah Pilchard",
     "source": "https://unsplash.com/photos/pumpkins-in-a-field-during-golden-hour-0ZQG2WeU8KM",
     "license": "https://unsplash.com/license",
@@ -451,8 +601,11 @@
   },
   {
     "id": "HO1",
-    "collection": "holi",
+    "tags": [
+      "holi"
+    ],
     "title": "A palette of gulal",
+    "caption": "assorted color holi powder lot",
     "author": "Ronni Kurtz",
     "source": "https://unsplash.com/photos/assorted-color-holi-powder-lot-AJnv_lwhv7M",
     "license": "https://unsplash.com/license",
@@ -460,8 +613,11 @@
   },
   {
     "id": "HO2",
-    "collection": "holi",
+    "tags": [
+      "holi"
+    ],
     "title": "A handful of pink",
+    "caption": "pink powder in right human palm",
     "author": "Honey Fangs",
     "source": "https://unsplash.com/photos/pink-powder-in-right-human-palm-UjcwVv_Tj44",
     "license": "https://unsplash.com/license",
@@ -469,8 +625,11 @@
   },
   {
     "id": "HO3",
-    "collection": "holi",
+    "tags": [
+      "holi"
+    ],
     "title": "Colour and confetti",
+    "caption": "A group of people celebrating with colored powder and confetti",
     "author": "Dibakar Roy",
     "source": "https://unsplash.com/photos/a-group-of-people-celebrating-with-colored-powder-and-confetti-OO_AlBW8S3o",
     "license": "https://unsplash.com/license",
@@ -478,8 +637,11 @@
   },
   {
     "id": "HO4",
-    "collection": "holi",
+    "tags": [
+      "holi"
+    ],
     "title": "Vrindavan in red and gold",
+    "caption": "festival of colour holi 2023",
     "author": "bhupesh pal",
     "source": "https://unsplash.com/photos/a-group-of-people-covered-in-colored-powder-Ygx_4v2At-k",
     "license": "https://unsplash.com/license",
@@ -487,8 +649,11 @@
   },
   {
     "id": "HO5",
-    "collection": "holi",
+    "tags": [
+      "holi"
+    ],
     "title": "Clouds of colour",
+    "caption": "People covered in colored powder celebrating a festival celebration",
     "author": "Paddma Sambhav",
     "source": "https://unsplash.com/photos/people-covered-in-colored-powder-celebrating-a-festival-celebration-2QINK2woicg",
     "license": "https://unsplash.com/license",

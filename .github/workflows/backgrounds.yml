@@ -54,15 +54,18 @@ jobs:
           const {execFileSync} = require('node:child_process');
           const release = JSON.parse(fs.readFileSync('/tmp/background-release.json'));
           const directory = 'tv/dist/backgrounds-v1';
-          for (const name of fs.readdirSync(directory)) {
+          const metadata = ['CREDITS.txt', 'SHA256SUMS', 'manifest.json'];
+          // Publish the manifest last, after every referenced JPEG is available.
+          const names = [...fs.readdirSync(directory).filter(n => n.endsWith('.jpg')), ...metadata];
+          for (const name of names) {
             const file = `${directory}/${name}`;
             const existing = release.assets.find(a => a.name === name);
             const sha = 'sha256:' + crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
             if (existing) {
-              if (existing.digest !== sha) throw Error(`Existing asset differs: ${name}; review before replacing it.`);
-              continue;
+              if (existing.digest === sha) continue;
+              if (!metadata.includes(name)) throw Error(`Existing JPEG differs: ${name}; use a new content-addressed filename.`);
             }
-            execFileSync('gh', ['release', 'upload', 'backgrounds-v1', file], {stdio: 'inherit'});
+            execFileSync('gh', ['release', 'upload', 'backgrounds-v1', file, ...(existing ? ['--clobber'] : [])], {stdio: 'inherit'});
           }
           JS
           gh release edit backgrounds-v1 --draft=false --latest=false

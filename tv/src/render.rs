@@ -195,9 +195,13 @@ impl Renderer {
         // Also drawn during startup prewarming, before a photo arrives.
         canvas.draw_rect(bounds, &self.background_shade);
         if let Some(current) = view.current {
-            let credit = format!("Photo by {} · Unsplash", current.photo.author);
+            let mut credit = format!("Photo by {} · Unsplash", current.photo.author);
             let mut font = self.font.clone();
             font.set_size(16.0);
+            if let Some(caption) = &current.photo.caption {
+                let available = 1500.0 - font.measure_str(&credit, None).0;
+                credit = format!("{} · {credit}", self.ellipsized(caption, available, 16.0));
+            }
             let width = font.measure_str(&credit, None).0;
             self.text(
                 canvas,
