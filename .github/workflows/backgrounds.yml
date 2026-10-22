@@ -3,6 +3,11 @@ name: Publish background photos
 on:
   push:
     tags: ['backgrounds-v1']
+    branches: ['main']
+    paths:
+      - 'tv/backgrounds/**'
+      - 'tv/scripts/prepare-backgrounds.cjs'
+      - '.github/workflows/backgrounds.yml'
   workflow_dispatch:
 
 permissions:
@@ -40,7 +45,9 @@ jobs:
               --title 'Home scenic backgrounds' \
               --notes 'Reviewed seasonal and holiday photos downloaded by Home. Photographer credits, original Unsplash pages and license links are in CREDITS.txt and manifest.json. SHA256SUMS verifies the JPEGs. These assets are separate from the application download.'
           fi
-          gh api "repos/$GH_REPO/releases/tags/backgrounds-v1" > /tmp/background-release.json
+          # The tag endpoint omits draft releases; the release list includes them.
+          gh api "repos/$GH_REPO/releases" --paginate \
+            --jq '.[] | select(.tag_name == "backgrounds-v1")' > /tmp/background-release.json
           node - <<'JS'
           const fs = require('node:fs');
           const crypto = require('node:crypto');

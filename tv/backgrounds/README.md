@@ -77,7 +77,8 @@ manifest references. Publish the manifest on `main` only after its new assets ar
 available; update the release's manifest and SHA256SUMS for auditing too.
 The ordinary application build neither downloads nor bundles these JPEGs.
 
-The initial `backgrounds-v1` tag runs the **Publish background photos** workflow.
+The initial `backgrounds-v1` tag, and photo-manifest or publishing changes on
+`main`, run the **Publish background photos** workflow.
 It fetches the approved source images, checks every hash against the reviewed
 manifest, and publishes the complete asset set without changing the latest app
 release. A rerun skips identical assets and refuses to overwrite different bytes.
