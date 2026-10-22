@@ -18,16 +18,16 @@ home directory. Choose a local name for each TV, such as `living-room` or
 choose. The executable contains the Home TV package and license notices.
 
 Download the **executable and its checksum** from the same row below into your
-Downloads folder. These links are for tvhome 0.1.5. Choose your computer's platform;
+Downloads folder. These links are for tvhome 0.1.6. Choose your computer's platform;
 on a Mac, **About This Mac** shows an Apple chip or Intel processor. On Linux,
 `uname -m` reports `aarch64` for ARM64 or `x86_64` for x64.
 
 | Computer | Executable | Checksum | Requirements |
 | --- | --- | --- | --- |
-| Apple Silicon Mac | [tvhome-darwin-arm64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.5/tvhome-darwin-arm64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.5/tvhome-darwin-arm64.sha256) | macOS 13+ |
-| Intel Mac | [tvhome-darwin-x64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.5/tvhome-darwin-x64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.5/tvhome-darwin-x64.sha256) | macOS 13+ |
-| ARM64 Linux | [tvhome-linux-arm64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.5/tvhome-linux-arm64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.5/tvhome-linux-arm64.sha256) | glibc 2.35+; systemd for background jobs |
-| x64 Linux | [tvhome-linux-x64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.5/tvhome-linux-x64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.5/tvhome-linux-x64.sha256) | glibc 2.35+; systemd for background jobs |
+| Apple Silicon Mac | [tvhome-darwin-arm64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.6/tvhome-darwin-arm64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.6/tvhome-darwin-arm64.sha256) | macOS 13+ |
+| Intel Mac | [tvhome-darwin-x64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.6/tvhome-darwin-x64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.6/tvhome-darwin-x64.sha256) | macOS 13+ |
+| ARM64 Linux | [tvhome-linux-arm64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.6/tvhome-linux-arm64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.6/tvhome-linux-arm64.sha256) | glibc 2.35+; systemd for background jobs |
+| x64 Linux | [tvhome-linux-x64](https://github.com/anantc/webos-custom-home/releases/download/v0.1.6/tvhome-linux-x64) | [.sha256](https://github.com/anantc/webos-custom-home/releases/download/v0.1.6/tvhome-linux-x64.sha256) | glibc 2.35+; systemd for background jobs |
 
 ### Verify and install
 
@@ -89,7 +89,7 @@ Open a **new terminal** so the shell loads the updated command path, then run:
 tvhome --version
 ```
 
-It should report `tvhome 0.1.5`. In the current terminal, or with another shell,
+It should report `tvhome 0.1.6`. In the current terminal, or with another shell,
 use `~/.local/bin/tvhome` in place of `tvhome` in subsequent commands.
 The downloaded file can be deleted after installation.
 

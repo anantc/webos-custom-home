@@ -1,6 +1,6 @@
 {
   "id": "com.anant.tvhome.native",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "vendor": "Anant",
   "type": "native",
   "main": "bin/tvhome-native",

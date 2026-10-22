@@ -9,7 +9,7 @@ fn main() {
         let package = env::var_os("TVHOME_IPK")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
-                PathBuf::from("../tv/dist/template/com.anant.tvhome.native_0.1.5_arm.ipk")
+                PathBuf::from("../tv/dist/template/com.anant.tvhome.native_0.1.6_arm.ipk")
             });
         println!("cargo:rerun-if-changed={}", package.display());
         fs::copy(&package, &out).expect("Build the Home template first: ./tv/dev.sh template");
