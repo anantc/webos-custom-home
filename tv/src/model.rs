@@ -4,6 +4,7 @@ use serde::Deserialize;
 pub const COLS: usize = 6;
 pub const CARD_W: f32 = 250.0;
 pub const CARD_H: f32 = 150.0;
+pub const FOCUSED_SCALE: f32 = 1.14;
 pub const STEP_X: f32 = 294.0;
 pub const STEP_Y: f32 = 242.0;
 pub const LEFT: f32 = 100.0;
@@ -28,6 +29,25 @@ pub fn weather_bounds(count: usize) -> (f32, f32, f32, f32) {
 }
 pub fn weather_action_bounds(index: usize) -> (f32, f32, f32, f32) {
     (LEFT + 24.0, 632.0 + index as f32 * 88.0, 800.0, 76.0)
+}
+pub fn weather_focus_bounds(count: usize) -> (f32, f32, f32, f32) {
+    let (x, y, w, h) = weather_bounds(count);
+    (x - 28.0, y + 4.0, w + 56.0, h + 28.0)
+}
+
+pub fn tile_focus(scale: f32) -> f32 {
+    ((scale - 1.0) / (FOCUSED_SCALE - 1.0)).clamp(0.0, 1.0)
+}
+
+/// Rendering and pointer selection share the tile's animated bounds.
+pub fn tile_bounds(position: (f32, f32), scroll: f32, scale: f32) -> (f32, f32, f32, f32) {
+    let (w, h) = (CARD_W * scale, CARD_H * scale);
+    (
+        position.0 - (w - CARD_W) / 2.0,
+        position.1 - scroll - (h - CARD_H) / 2.0,
+        w,
+        h,
+    )
 }
 /// Wi-Fi is the rightmost control, aligned with the tray's right edge.
 pub fn wifi_bounds() -> (f32, f32, f32, f32) {

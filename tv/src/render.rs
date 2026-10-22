@@ -2,11 +2,14 @@ use crate::model::*;
 use crate::platform::wifi::{Connection, Status};
 use anyhow::{Context, Result};
 use skia_safe::{
-    AlphaType, Canvas, Color, ColorType, Data, Font, FontMgr, Image, ImageInfo, Paint, Rect,
+    AlphaType, Canvas, Color, ColorType, Data, Font, FontMgr, IRect, Image, ImageInfo, Paint, Rect,
 };
 use std::path::Path;
 use std::sync::mpsc;
 mod weather;
+
+const FOCUS_SURFACE: Color = Color::from_rgb(239, 240, 244);
+const FOCUS_INK: Color = Color::from_rgb(24, 25, 30);
 
 pub struct Frame<'a> {
     pub background: crate::backgrounds::View<'a>,
@@ -42,6 +45,8 @@ pub struct Renderer {
     font: Font,
     pub icons: Vec<Option<Image>>,
     glow: Image,
+    focus_shadow: Image,
+    focus_rim: Paint,
     background_shade: Paint,
     symbols: crate::symbols::Symbols,
 }
@@ -51,6 +56,16 @@ fn paint(color: Color) -> Paint {
     p.set_color(color).set_anti_alias(true);
     p
 }
+
+fn photo_caption(text: &str) -> String {
+    if text.chars().count() <= 56 {
+        return text.to_owned();
+    }
+    let prefix: String = text.chars().take(53).collect();
+    let end = prefix.rfind(char::is_whitespace).unwrap_or(prefix.len());
+    format!("{}...", prefix[..end].trim_end())
+}
+
 pub(crate) fn rgba_image(bytes: &[u8], w: u32, h: u32) -> Result<Image> {
     let info = ImageInfo::new(
         (w as i32, h as i32),
@@ -134,6 +149,18 @@ impl Renderer {
                 pixels[offset..offset + 4].copy_from_slice(&[255, 255, 255, a]);
             }
         }
+        // Bake a soft rounded shadow once; nine-patch stretching preserves its feathered edges.
+        let mut shadow = vec![0u8; 128 * 128 * 4];
+        for y in 0..128 {
+            for x in 0..128 {
+                let dx = (x as f32 + 0.5 - 64.0).abs() - 16.0;
+                let dy = (y as f32 + 0.5 - 64.0).abs() - 16.0;
+                let distance =
+                    (dx.max(0.0).hypot(dy.max(0.0)) + dx.max(dy).min(0.0) - 16.0).max(0.0);
+                shadow[(y * 128 + x) * 4 + 3] =
+                    (220.0 * (-0.5 * (distance / 10.0).powi(2)).exp()) as u8;
+            }
+        }
         let colors =
             [195, 155, 20, 90, 225].map(|a| skia_safe::Color4f::from(Color::from_argb(a, 0, 0, 0)));
         let gradient = skia_safe::gradient::Gradient::new(
@@ -151,13 +178,63 @@ impl Renderer {
             &gradient,
             None,
         ));
+        let rim_colors = [
+            Color::from_argb(150, 225, 234, 247),
+            Color::from_argb(55, 199, 214, 234),
+            Color::from_argb(95, 218, 228, 242),
+        ]
+        .map(skia_safe::Color4f::from);
+        let rim_gradient = skia_safe::gradient::Gradient::new(
+            skia_safe::gradient::Colors::new(
+                &rim_colors,
+                Some(&[0.0, 0.6, 1.0]),
+                skia_safe::TileMode::Clamp,
+                None,
+            ),
+            skia_safe::gradient::Interpolation::default(),
+        );
+        let mut focus_rim = paint(Color::WHITE);
+        focus_rim
+            .set_style(skia_safe::paint::Style::Stroke)
+            .set_stroke_width(1.25)
+            .set_shader(skia_safe::gradient::shaders::linear_gradient(
+                ((0.0, 0.0), (CARD_W * 0.35, CARD_H)),
+                &rim_gradient,
+                None,
+            ));
         Ok(Self {
+            focus_rim,
             background_shade,
             font,
             icons: vec![None; count],
             glow: rgba_image(&pixels, 256, 96)?,
+            focus_shadow: rgba_image(&shadow, 128, 128)?,
             symbols: crate::symbols::Symbols::new()?,
         })
+    }
+
+    fn shadow(&self, canvas: &Canvas, rect: Rect, opacity: f32, offset: f32) {
+        if opacity <= 0.0 {
+            return;
+        }
+        let mut p = paint(Color::WHITE);
+        p.set_alpha_f(opacity);
+        canvas.draw_image_nine(
+            &self.focus_shadow,
+            IRect::new(60, 60, 68, 68),
+            Rect::from_xywh(
+                rect.left() - 32.0,
+                rect.top() - 32.0 + offset,
+                rect.width() + 64.0,
+                rect.height() + 64.0,
+            ),
+            skia_safe::FilterMode::Linear,
+            Some(&p),
+        );
+    }
+
+    fn header_focus(&self, canvas: &Canvas, center: (f32, f32)) {
+        canvas.draw_circle(center, 32.0, &paint(FOCUS_SURFACE));
     }
 
     // Explicit size/alignment keeps the fixed 1080p layout easy to audit.
@@ -200,7 +277,10 @@ impl Renderer {
             font.set_size(16.0);
             if let Some(caption) = &current.photo.caption {
                 let available = 1500.0 - font.measure_str(&credit, None).0;
-                credit = format!("{} · {credit}", self.ellipsized(caption, available, 16.0));
+                credit = format!(
+                    "{} · {credit}",
+                    self.ellipsized(&photo_caption(caption), available, 16.0)
+                );
             }
             let width = font.measure_str(&credit, None).0;
             self.text(
@@ -279,15 +359,21 @@ impl Renderer {
             false,
         );
         let settings_focused = f.status && f.panel.is_none();
+        if settings_focused {
+            self.header_focus(
+                canvas,
+                (status_x + status_w / 2.0, status_y + status_h / 2.0),
+            );
+        }
         let symbol = if settings_focused {
-            Color::WHITE
+            FOCUS_INK
         } else {
             Color::from_rgb(220, 221, 227)
         };
         // Eight rounded teeth and an open centre, like Apple's gearshape symbol.
         canvas.save();
         canvas.translate((status_x + status_w / 2.0, status_y + status_h / 2.0));
-        let scale = HEADER_ICON_SIZE / 32.0 * if settings_focused { 1.15 } else { 1.0 };
+        let scale = HEADER_ICON_SIZE / 32.0;
         canvas.scale((scale, scale));
         let mut gear = paint(symbol);
         for _ in 0..8 {
@@ -679,22 +765,24 @@ impl Renderer {
 
     fn wifi_icon(&self, canvas: &Canvas, status: &Status, focused: bool) {
         let (x, y, w, h) = wifi_bounds();
-        let background = Color::BLACK;
+        let background = if focused { FOCUS_SURFACE } else { Color::BLACK };
         canvas.save();
         let center = (x + w / 2.0, y + h / 2.0);
+        if focused {
+            self.header_focus(canvas, center);
+        }
         // The outer arc plus its round stroke fits the same width as the gear.
-        let scale = HEADER_ICON_SIZE / (31.0 * std::f32::consts::SQRT_2 + 4.5)
-            * if focused { 1.15 } else { 1.0 };
+        let scale = HEADER_ICON_SIZE / (31.0 * std::f32::consts::SQRT_2 + 4.5);
         canvas.translate(center);
         canvas.scale((scale, scale));
         canvas.translate((-center.0, -center.1));
         let foreground = if focused {
-            Color::WHITE
+            FOCUS_INK
         } else {
             Color::from_rgb(220, 221, 227)
         };
         let inactive = if focused {
-            Color::from_rgb(90, 91, 100)
+            Color::from_rgb(156, 158, 168)
         } else {
             Color::from_rgb(72, 73, 82)
         };
@@ -843,15 +931,12 @@ impl Renderer {
     }
 
     fn card(&self, canvas: &Canvas, f: &Frame<'_>, i: usize) {
-        let (x, y) = f.positions[i];
-        let y = y - f.scroll;
+        let scale = f.scales[i];
+        let (x, y, w, h) = tile_bounds(f.positions[i], f.scroll, scale);
         if !(-200.0..1100.0).contains(&y) {
             return;
         }
-        let scale = f.scales[i];
-        let w = CARD_W * scale;
-        let h = CARD_H * scale;
-        let rect = Rect::from_xywh(x - (w - CARD_W) / 2.0, y - (h - CARD_H) / 2.0, w, h);
+        let rect = Rect::from_xywh(x, y, w, h);
         canvas.save();
         if let Some(elapsed) = f.move_elapsed {
             // Stable phases keep tiles from rocking in unison or jumping when reordered.
@@ -923,12 +1008,28 @@ impl Renderer {
             self.text(
                 canvas,
                 &f.catalog.apps[i].title,
-                x + CARD_W / 2.0,
-                y + 86.0,
-                25.0,
+                rect.center().x,
+                rect.center().y + 11.0 * scale,
+                25.0 * scale,
                 Color::WHITE,
                 true,
             );
+        }
+        let focus = tile_focus(scale);
+        if focus > 0.0 {
+            let mut border = self.focus_rim.clone();
+            border.set_alpha_f(focus);
+            canvas.save();
+            canvas
+                .translate((rect.left(), rect.top()))
+                .scale((scale, scale));
+            canvas.draw_round_rect(
+                Rect::from_xywh(-1.5, -1.5, CARD_W + 3.0, CARD_H + 3.0),
+                16.5,
+                16.5,
+                &border,
+            );
+            canvas.restore();
         }
         canvas.restore();
     }

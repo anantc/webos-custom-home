@@ -90,7 +90,7 @@ struct Ui {
 impl Ui {
     fn new(count: usize) -> Self {
         let mut scales = vec![Tween::new(1.0); count];
-        scales[0] = Tween::new(1.14);
+        scales[0] = Tween::new(FOCUSED_SCALE);
         Self {
             selected: 0,
             header: None,
@@ -154,7 +154,7 @@ impl Ui {
             .map(|(i, app)| {
                 let target = if i == self.selected && self.header.is_none() && self.panel.is_none()
                 {
-                    1.14
+                    FOCUSED_SCALE
                 } else {
                     1.0
                 };
@@ -410,9 +410,7 @@ impl Ui {
         }
         if self.moving.is_some() {
             // Pointer movement must not drop or change the tile being moved with the arrows.
-            let (left, top) = self.positions[self.selected].value_at(Instant::now());
-            return (left..left + CARD_W).contains(&x)
-                && (top - self.scroll.value()..top - self.scroll.value() + CARD_H).contains(&y);
+            return self.tile_contains(self.selected, x, y);
         }
         if matches!(
             self.panel,
@@ -457,7 +455,7 @@ impl Ui {
         for (header, (left, top, width, height)) in [
             (Header::Wifi, wifi_bounds()),
             (Header::Controls, status_bounds()),
-            (Header::Weather, weather_bounds(catalog.apps.len())),
+            (Header::Weather, weather_focus_bounds(catalog.apps.len())),
         ] {
             if header == Header::Weather && self.scroll.value() > 1.0 {
                 continue;
@@ -467,15 +465,25 @@ impl Ui {
                 return true;
             }
         }
-        for i in 0..catalog.apps.len() {
-            let (cx, cy) = self.positions[i].value_at(Instant::now());
-            let cy = cy - self.scroll.value();
-            if (cx..cx + CARD_W).contains(&x) && (cy..cy + CARD_H).contains(&y) {
+        // The selected tile is drawn last, so test it first if animated bounds overlap.
+        let selected = self.selected;
+        for i in std::iter::once(selected).chain((0..catalog.apps.len()).filter(|i| *i != selected))
+        {
+            if self.tile_contains(i, x, y) {
                 self.select(i, catalog.apps.len());
                 return true;
             }
         }
         false
+    }
+
+    fn tile_contains(&self, i: usize, x: f32, y: f32) -> bool {
+        let (left, top, w, h) = tile_bounds(
+            self.positions[i].value_at(Instant::now()),
+            self.scroll.value(),
+            self.scales[i].value(),
+        );
+        (left..left + w).contains(&x) && (top..top + h).contains(&y)
     }
 
     fn confirm_down(&mut self, button: ConfirmButton, now: Instant, catalog: &Catalog) {
@@ -1084,7 +1092,7 @@ fn main() -> Result<()> {
         for (i, scale) in ui.scales.iter_mut().enumerate() {
             scale.set(
                 if i == ui.selected && ui.header.is_none() && ui.panel.is_none() {
-                    1.14
+                    FOCUSED_SCALE
                 } else {
                     1.0
                 },
@@ -1222,6 +1230,49 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pointer_can_activate_the_scaled_edge_of_apps_and_pinned_inputs() {
+        for input in [false, true] {
+            let mut catalog = catalog();
+            catalog.apps[0].input = input;
+            if input {
+                catalog.apps[0].id = "com.webos.app.hdmi1".into();
+            }
+            let mut ui = Ui::new(catalog.apps.len());
+            let (x, y) = position(0, catalog.apps.len());
+            assert!(ui.pointer(x + CARD_W / 2.0, y - 5.0, &catalog));
+            assert_eq!(ui.focus_target(), Some(FocusTarget::App(0)));
+            assert_eq!(
+                ui.activate(&catalog),
+                Some(Action::Launch(
+                    catalog.apps[0].id.clone(),
+                    catalog.apps[0].title.clone()
+                ))
+            );
+            assert!(ui.pointer(x + CARD_W / 2.0, y + CARD_H + 5.0, &catalog));
+            assert!(!ui.pointer(x + CARD_W / 2.0, y - 20.0, &catalog));
+            pick_up(&mut ui, &catalog, ConfirmButton::Pointer);
+            assert!(ui.pointer(x + CARD_W / 2.0, y - 5.0, &catalog));
+        }
+    }
+
+    #[test]
+    fn weather_focus_padding_is_clickable_in_both_layouts() {
+        for count in [2, 18] {
+            let mut catalog = catalog();
+            catalog.apps.resize(count, catalog.apps[0].clone());
+            let mut ui = Ui::new(count);
+            let (left, top, _, _) = weather_focus_bounds(count);
+            assert!(ui.pointer(left + 15.0, top + 15.0, &catalog));
+            assert_eq!(
+                ui.focus_target(),
+                Some(FocusTarget::Header(Header::Weather))
+            );
+            assert_eq!(ui.activate(&catalog), None);
+            assert_eq!(ui.panel, Some(Panel::Weather));
+        }
+    }
 
     #[test]
     fn city_picker_remote_keyboard_results_pointer_and_cancel() {

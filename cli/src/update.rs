@@ -608,19 +608,63 @@ fn backup_state(config: &Config, files: &BTreeMap<String, Vec<u8>>) -> Result<Pa
 
 fn install_update(
     config: &Config,
-    mut package: Package,
+    package: Package,
     catalog: &package::CatalogBundle,
     version: &str,
 ) -> Result<()> {
+    if package.version()? != version {
+        return Err(fault("Home package version does not match the update."));
+    }
+    install_prepared(config, Package::read(&package.personalize(catalog)?)?)
+}
+
+fn storage_writable(connection: &TvSsh) -> Result<bool> {
+    // Exercise the create/rename operation used by preferences and catalog publishing.
+    let command = format!(
+        "for dir in '{APP}/state' '{APP}/assets'; do \
+         probe=$(mktemp -d \"$dir/.tvhome-write-check.XXXXXX\") || {{ printf blocked; exit 0; }}; \
+         if (printf check > \"$probe/a\" && mv \"$probe/a\" \"$probe/b\"); then \
+           rm -f \"$probe/b\"; rmdir \"$probe\" || exit 1; \
+         else rm -f \"$probe/a\" \"$probe/b\"; rmdir \"$probe\"; printf blocked; exit 0; fi; \
+         done; printf writable"
+    );
+    match connection.command(&command)?.as_slice() {
+        b"writable" => Ok(true),
+        b"blocked" => Ok(false),
+        _ => Err(fault("Unexpected Home storage check reply.")),
+    }
+}
+
+pub(crate) fn install_prepared(config: &Config, mut package: Package) -> Result<()> {
     let connection = TvSsh::connect(config, false)?;
+    let version = package.version()?;
     close_home(&connection)?;
     let saved = read_state(&connection)?;
     let backup = backup_state(config, &saved)?;
     println!("{}: saved Home settings to {}", config.tv, backup.display());
     package.preserve_state(&saved)?;
-    let ipk = package.personalize(catalog)?;
+    let ipk = package.finish()?;
     setup::install_package(&connection, &ipk)?;
-    if installed_version(&connection)?.as_deref() != Some(version) {
+    if !storage_writable(&connection)? {
+        println!(
+            "{}: repairing Home storage; saved settings will be restored.",
+            config.tv
+        );
+        // LG can retain unwritable directories on an in-place update. A fresh
+        // Developer Mode install applies the packaged permissions again.
+        connection.luna(
+            "luna://com.webos.appInstallService/dev/remove",
+            &json!({"id":APP_ID,"subscribe":true}),
+            Some("REMOVED"),
+        )?;
+        setup::install_package(&connection, &ipk).map_err(|_| fault(
+            "Home repair could not finish. Its settings are safe in this TV's update-backups folder."
+        ))?;
+        if !storage_writable(&connection)? {
+            return Err(fault("Home storage is still unwritable after repair. Settings are retained in this TV's update-backups folder."));
+        }
+    }
+    if installed_version(&connection)?.as_deref() != Some(version.as_str()) {
         return Err(fault(
             "Home did not report the expected version after installation.",
         ));
@@ -692,6 +736,22 @@ mod tests {
             fs::read(backup.join("preferences.json")).unwrap(),
             saved["preferences.json"]
         );
+
+        assert_eq!(connection.command("fixture-removals").unwrap(), b"0");
+        connection.command("fixture-block-storage").unwrap();
+        // Exercise setup's path as well as update: both must carry saved settings
+        // through a repair rather than reinstalling the empty template.
+        let prepared = Package::read(package::bundled())
+            .unwrap()
+            .personalize(&catalog)
+            .unwrap();
+        setup::install_app(&config, &prepared).unwrap();
+        assert_eq!(read_state(&connection).unwrap(), saved);
+        assert_eq!(connection.command("fixture-removals").unwrap(), b"1");
+        assert!(storage_writable(&connection).unwrap());
+        setup::install_app(&config, &prepared).unwrap();
+        assert_eq!(connection.command("fixture-removals").unwrap(), b"1");
+        assert_eq!(read_state(&connection).unwrap(), saved);
 
         connection.command("fixture-fail-next-install").unwrap();
         let package = Package::read(package::bundled()).unwrap();

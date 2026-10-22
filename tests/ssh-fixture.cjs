@@ -9,7 +9,7 @@ fs.writeFileSync(path.join(dir,'key'),client,{mode:0o600});
 let uploaded=Buffer.alloc(0);
 const {tarEntries}=require('../tv/scripts/verify-package.cjs');
 const app='/media/developer/apps/usr/palm/applications/com.anant.tvhome.native';
-let files=new Map(), running=true, failInstall=false;
+let files=new Map(), running=true, failInstall=false, blockedStorage=false, removals=0;
 function installPackage(bytes) {
   if(bytes.subarray(0,8).toString()!=='!<arch>\n')throw Error('invalid IPK');
   for(let offset=8;offset+60<=bytes.length;) {
@@ -27,7 +27,7 @@ function resetHome() {
     [app+'/appinfo.json',Buffer.from(JSON.stringify({id:'com.anant.tvhome.native',version:'0.0.1'}))],
     [app+'/state/preferences.json',Buffer.from(JSON.stringify({pinnedInputs:['hdmi1'],order:['hdmi1','netflix'],city:{name:'Mumbai'}}))],
     [app+'/state/speedtest-result.json',Buffer.from('{"mbps":210}')],
-  ]);running=true;
+  ]);running=true;blockedStorage=false;removals=0;
 }
 
 const server=new Server({hostKeys:[host],algorithms:{serverHostKey:['ssh-rsa']}},connection=>{
@@ -43,6 +43,9 @@ const server=new Server({hostKeys:[host],algorithms:{serverHostKey:['ssh-rsa']}}
     if(info.command==='fixture-reset-home') {resetHome();finish('');}
     else if(info.command==='fixture-home-running')finish(running?'running':'');
     else if(info.command==='fixture-fail-next-install') {failInstall=true;finish('');}
+    else if(info.command==='fixture-block-storage') {blockedStorage=true;finish('');}
+    else if(info.command==='fixture-removals')finish(String(removals));
+    else if(info.command.startsWith('for dir ') && info.command.includes('.tvhome-write-check.'))finish(blockedStorage?'blocked':'writable');
     else if(info.command==='if pidof tvhome-native >/dev/null; then printf running; fi')finish(running?'running':'');
     else if(info.command.startsWith('if test -e ')) {
       const file=info.command.match(/'([^']+)'/)[1];
@@ -59,6 +62,9 @@ const server=new Server({hostKeys:[host],algorithms:{serverHostKey:['ssh-rsa']}}
     } else if(info.command==='read-upload')finish(uploaded);
     else if(info.command.includes('luna://com.webos.applicationManager/dev/closeByAppId')) {
       running=false;finish('{"returnValue":true}');
+    } else if(info.command.includes('luna://com.webos.appInstallService/dev/remove')) {
+      removals++; files.clear(); running=false; blockedStorage=false;
+      finish('{"returnValue":true,"details":{"state":"REMOVED"}}');
     } else if(info.command.includes('luna://com.webos.appInstallService/dev/install')) {
       if(failInstall) {failInstall=false;finish('{"returnValue":true,"details":{"state":"FAILED"}}');}
       else {installPackage(uploaded);finish('{"returnValue":true,"details":{"state":"INSTALLED"}}');}

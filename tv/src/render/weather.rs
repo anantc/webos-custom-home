@@ -1,9 +1,16 @@
-use super::{paint, Frame, Renderer};
-use crate::model::{weather_action_bounds, weather_bounds, LEFT};
+use super::{paint, Frame, Renderer, FOCUS_INK, FOCUS_SURFACE};
+use crate::model::{weather_action_bounds, weather_bounds, weather_focus_bounds, LEFT};
 use skia_safe::{Canvas, Color, Rect};
 
 impl Renderer {
-    fn weather_temperature(&self, canvas: &Canvas, text: &str, bounds: Rect, size: f32) {
+    fn weather_temperature(
+        &self,
+        canvas: &Canvas,
+        text: &str,
+        bounds: Rect,
+        size: f32,
+        color: Color,
+    ) {
         let mut font = self.font.clone();
         font.set_size(size);
         let width = font.measure_str(text, None).0;
@@ -14,7 +21,7 @@ impl Renderer {
             bounds.left(),
             bounds.bottom(),
             size,
-            Color::WHITE,
+            color,
             false,
         );
     }
@@ -22,12 +29,19 @@ impl Renderer {
         let state = f.weather;
         let (x, y, _, h) = weather_bounds(f.catalog.apps.len());
         let compact = h < 200.0;
-        let muted = Color::from_rgb(166, 166, 175);
+        let focused = f.weather_focused && !f.weather_details && f.city_picker.is_none();
+        let foreground = if focused { FOCUS_INK } else { Color::WHITE };
+        let muted = if focused {
+            Color::from_rgb(76, 78, 87)
+        } else {
+            Color::from_rgb(166, 166, 175)
+        };
         canvas.save();
-        if f.weather_focused && !f.weather_details {
-            canvas.translate((x, y));
-            canvas.scale((1.025, 1.025));
-            canvas.translate((-x, -y));
+        if focused {
+            let (left, top, width, height) = weather_focus_bounds(f.catalog.apps.len());
+            let rect = Rect::from_xywh(left, top, width, height);
+            self.shadow(canvas, rect, 0.65, 8.0);
+            canvas.draw_round_rect(rect, 26.0, 26.0, &paint(FOCUS_SURFACE));
         }
         let city = self.ellipsized(
             state.city.as_deref().unwrap_or(if state.refreshing {
@@ -44,11 +58,7 @@ impl Renderer {
             x,
             y + 46.0,
             if compact { 22.0 } else { 29.0 },
-            if f.weather_focused {
-                Color::WHITE
-            } else {
-                muted
-            },
+            if focused { foreground } else { muted },
             false,
         );
         let baseline = y + if compact { 130.0 } else { 172.0 };
@@ -67,6 +77,7 @@ impl Renderer {
                 150.0,
             ),
             if compact { 64.0 } else { 125.0 },
+            foreground,
         );
         let icon_size = if compact { 55.0 } else { 104.0 };
         if let Some(c) = &state.conditions {
@@ -76,7 +87,11 @@ impl Renderer {
                 x + if compact { 150.0 } else { 215.0 },
                 baseline - icon_size,
                 icon_size,
-                Color::from_rgb(225, 225, 231),
+                if focused {
+                    foreground
+                } else {
+                    Color::from_rgb(225, 225, 231)
+                },
             );
             if !compact {
                 let mut description = c.description().to_string();
@@ -89,7 +104,11 @@ impl Renderer {
                     x,
                     y + 228.0,
                     25.0,
-                    Color::from_rgb(199, 199, 207),
+                    if focused {
+                        muted
+                    } else {
+                        Color::from_rgb(199, 199, 207)
+                    },
                     false,
                 );
             }
@@ -116,7 +135,11 @@ impl Renderer {
                 1.0,
                 if compact { 124.0 } else { 208.0 },
             ),
-            &paint(Color::from_rgb(55, 55, 61)),
+            &paint(if focused {
+                Color::from_rgb(193, 195, 204)
+            } else {
+                Color::from_rgb(55, 55, 61)
+            }),
         );
         self.text(
             canvas,
@@ -138,7 +161,7 @@ impl Renderer {
             ax,
             y + if compact { 98.0 } else { 170.0 },
             if compact { 38.0 } else { 67.0 },
-            Color::WHITE,
+            foreground,
             false,
         );
         let (label, color) = state
@@ -146,7 +169,14 @@ impl Renderer {
             .as_ref()
             .map(|a| {
                 let [r, g, b] = a.color();
-                (a.label(), Color::from_rgb(r, g, b))
+                (
+                    a.label(),
+                    if focused {
+                        Color::from_rgb(r / 2, g / 2, b / 2)
+                    } else {
+                        Color::from_rgb(r, g, b)
+                    },
+                )
             })
             .unwrap_or(("Unavailable", muted));
         self.text(
@@ -205,7 +235,13 @@ impl Renderer {
             .as_ref()
             .map(|c| format!("{:.0}°", c.temperature))
             .unwrap_or_else(|| "—°".into());
-        self.weather_temperature(canvas, &temp, Rect::from_xywh(x, 280.0, 144.0, 80.0), 78.0);
+        self.weather_temperature(
+            canvas,
+            &temp,
+            Rect::from_xywh(x, 280.0, 144.0, 80.0),
+            78.0,
+            Color::WHITE,
+        );
         if let Some(c) = &state.conditions {
             self.symbols
                 .draw(canvas, c.icon(), x + 160.0, 293.0, 72.0, Color::WHITE);

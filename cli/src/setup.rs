@@ -130,14 +130,7 @@ pub async fn run(
     Ok(())
 }
 pub fn install_app(config: &Config, bytes: &[u8]) -> Result<()> {
-    let connection = TvSsh::connect(config, false)?;
-    install_package(&connection, bytes)?;
-    connection.luna(
-        "luna://com.webos.applicationManager/launch",
-        &json!({"id":APP_ID}),
-        None,
-    )?;
-    Ok(())
+    crate::update::install_prepared(config, Package::read(bytes)?)
 }
 
 pub(crate) fn install_package(connection: &TvSsh, bytes: &[u8]) -> Result<()> {

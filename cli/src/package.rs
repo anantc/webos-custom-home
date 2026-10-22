@@ -277,7 +277,7 @@ impl Package {
         let catalog = self.catalog(config, points, inputs).await?;
         self.personalize(&catalog)
     }
-    fn finish(mut self) -> Result<Vec<u8>> {
+    pub(crate) fn finish(mut self) -> Result<Vec<u8>> {
         let size: usize = self.data.values().map(|(_, bytes)| bytes.len()).sum();
         let control = &mut self
             .control

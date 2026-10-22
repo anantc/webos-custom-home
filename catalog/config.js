@@ -10,6 +10,6 @@ window.CONFIG = {
     'com.palmdts.devmode', // Developer Mode
     'com.webos.app.livetv',
     'com.webos.app.hdmi1', 'com.webos.app.hdmi2', 'com.webos.app.hdmi3', 'com.webos.app.hdmi4',
-    'com.webos.app.lgchannels', 'shortcutcopilot'
+    'shortcutcopilot'
   ]
 };
