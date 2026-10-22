@@ -29,7 +29,7 @@ fn shell_files(root: &Path, shell: &Path, zdotdir: Option<&Path>, macos: bool) -
     }
 }
 
-fn write_atomic(path: &Path, bytes: &[u8], mode: u32) -> Result<()> {
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8], mode: u32) -> Result<()> {
     let parent = path.parent().ok_or(fault("Invalid installation path."))?;
     fs::create_dir_all(parent).map_err(|_| fault("Cannot create installation directory."))?;
     let mut temp = tempfile::NamedTempFile::new_in(parent)
@@ -130,6 +130,12 @@ pub fn run() -> Result<()> {
         println!("Open a new terminal, then run: tvhome --tv living-room setup");
         println!("In this terminal you can use: ~/.local/bin/tvhome --tv living-room setup");
     }
+    Ok(())
+}
+
+pub fn update(root: &Path) -> Result<()> {
+    let source = std::env::current_exe().map_err(|_| fault("Cannot locate this executable."))?;
+    install_at(root, &source, &[])?;
     Ok(())
 }
 

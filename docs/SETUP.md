@@ -314,19 +314,45 @@ structured output, including the last-check timestamp.
 
 ## Updates
 
-Download and verify the updated executable, then run its `--install` option as in step 1. To update the Home app on
-one TV, stop its background jobs if configured, rerun setup, then restart them:
+With your TVs on, run this on the computer that manages them:
 
 ```sh
-tvhome --tv living-room uninstall
-tvhome --tv living-room setup
-tvhome --tv living-room background
+tvhome update
 ```
 
-`uninstall` stops that TV's computer jobs; it does not remove the TV app.
-Skip the first and last commands if you do not use background operation.
-Setup reuses the saved address and keys. Installing the updated package replaces
-Home on that TV; it does not reinstall your streaming apps.
+The command checks this project's latest stable GitHub release, downloads the
+executable for your computer and verifies its SHA-256 checksum before installing
+it. It then checks every saved TV profile and installs the bundled Home app
+where a newer version is available. Each TV keeps its own app catalog, tile
+order, pinned inputs, city selection and last speed-test result. Home closes
+briefly during installation and opens when the update has been verified.
+
+Existing background jobs pause during that TV's update and restart afterward,
+including after a failed installation. Their executable is updated too. Jobs
+that were stopped stay stopped; updating does not enable optional features.
+Other TVs' jobs keep running. Allow Local Network access again if macOS prompts.
+
+To update only one TV, plus this computer's executable:
+
+```sh
+tvhome --tv living-room update
+```
+
+A TV that is off, in standby or unreachable is **skipped**; the other TVs still
+update. The command neither wakes the TV nor queues a later installation. Turn
+it on and rerun `tvhome update`. This checks the TVs even when the computer
+already has the newest executable, so an offline TV can catch up later.
+
+The final summary separates updated, current, skipped and failed TVs. Pairing,
+Developer Mode or installation errors are reported per TV without stopping the
+remaining updates. Newer development builds are never downgraded. If you press
+Ctrl+C during a TV update, it finishes that TV and restores its jobs before
+stopping. Settings backups remain in that TV's
+`~/.tvhome/tvs/<name>/update-backups/` folder if recovery is needed.
+
+If your installed version does not recognize `update`, download and install the
+new executable once using [step 1](#1-download-and-install-tvhome). After that,
+`tvhome update` handles subsequent releases.
 
 Ordinary app installs/removals are picked up by the running watcher roughly once
 a minute. Home refreshes when it returns to the foreground and within five seconds

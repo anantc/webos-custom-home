@@ -1,0 +1,36 @@
+--- a/src/video/wayland/SDL_waylandmouse.c
++++ b/src/video/wayland/SDL_waylandmouse.c
+@@ -1291,7 +1291,10 @@
+     /* The compositor draws the pointer itself. Ask it directly, since the seats
+      * below are only reached once one of them has entered a surface, and
+      * SDL_RedrawCursor() only passes NULL while a window has mouse focus. */
+-    WaylandWebOS_SetCursorVisibility(mouse->cursor_visible);
++    /* Home patch: LG owns visibility; focus redraws must not wake its pointer. */
++    if (!SDL_GetHintBoolean("TVHOME_WEBOS_COMPOSITOR_CURSOR", false)) {
++        WaylandWebOS_SetCursorVisibility(mouse->cursor_visible);
++    }
+ #endif
+ 
+     wl_list_for_each (seat, &d->seat_list, link) {
+--- a/src/video/wayland/SDL_waylandevents.c
++++ b/src/video/wayland/SDL_waylandevents.c
+@@ -2339,6 +2339,19 @@
+ 
+     const xkb_keysym_t *syms = NULL;
+     SDL_Scancode scancode = Wayland_GetScancodeForKey(seat, key, &syms);
++#ifdef SDL_VIDEO_DRIVER_WAYLAND_WEBOS
++    /* Home patch: these are compositor notifications, not held keyboard keys.
++     * Update SDL's local cursor image without echoing a global visibility request
++     * or starting keyboard auto-repeat for a notification that has no key-up. */
++    if (SDL_GetHintBoolean("TVHOME_WEBOS_COMPOSITOR_CURSOR", false) &&
++        (scancode == SDL_SCANCODE_WEBOS_CURSOR_SHOW || scancode == SDL_SCANCODE_WEBOS_CURSOR_HIDE)) {
++        if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
++            SDL_GetMouse()->cursor_visible = (scancode == SDL_SCANCODE_WEBOS_CURSOR_SHOW);
++            Wayland_SeatUpdatePointerCursor(seat);
++        }
++        return;
++    }
++#endif
+     Wayland_HandleModifierKeys(seat, scancode, state == WL_KEYBOARD_KEY_STATE_PRESSED);
+ 
+     // If we have a key with unknown scancode, check if the keysym corresponds to a valid Unicode value, and assign it a reserved scancode.

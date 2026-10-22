@@ -9,6 +9,7 @@ mod setup;
 mod ssh;
 mod sync;
 mod tv;
+mod update;
 mod watch;
 
 use clap::{Parser, Subcommand};
@@ -57,6 +58,12 @@ impl Cli {
 }
 #[derive(Subcommand)]
 enum Action {
+    /// Update tvhome and Home on every saved TV, or only the TV named with --tv
+    Update {
+        // Used by a verified release executable while the parent holds update.lock.
+        #[arg(long, hide = true)]
+        apply: bool,
+    },
     /// List saved TVs and their cached app counts
     Tvs {
         #[arg(long)]
@@ -149,7 +156,7 @@ fn log(message: &str) {
 }
 async fn dispatch(config: &Config, action: &Action) -> Result<()> {
     match action {
-        Action::Tvs { .. } | Action::Setup { .. } | Action::Background => {
+        Action::Tvs { .. } | Action::Setup { .. } | Action::Background | Action::Update { .. } => {
             unreachable!("handled before profile loading")
         }
         Action::RemoveApp => setup::remove(config).await,
@@ -187,6 +194,9 @@ async fn execute(cli: Cli) -> Result<()> {
     if let Action::Tvs { json } = &command {
         let home = std::env::var_os("HOME").ok_or(fault("HOME is unavailable."))?;
         return inventory::list_tvs(Path::new(&home), *json);
+    }
+    if let Action::Update { apply } = &command {
+        return update::run(cli.tv.as_deref(), *apply).await;
     }
     let tv = cli.tv.as_deref().ok_or(fault(
         "Choose a TV with --tv NAME. Use tvhome tvs to list saved TVs.",
@@ -293,6 +303,22 @@ mod cli_tests {
     }
     #[test]
     fn tv_inventory_and_named_commands_have_help() {
+        assert!(Cli::try_parse_from(["tvhome", "update"])
+            .unwrap()
+            .tv
+            .is_none());
+        assert_eq!(
+            Cli::try_parse_from(["tvhome", "--tv", "office", "update"])
+                .unwrap()
+                .tv
+                .as_deref(),
+            Some("office")
+        );
+        let help = Cli::try_parse_from(["tvhome", "update", "--help"])
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(!help.contains("--apply"));
         assert!(Cli::try_parse_from(["tvhome", "tvs"]).is_ok());
         let cli = Cli::try_parse_from(["tvhome", "--tv", "bedroom", "sync", "--list"]).unwrap();
         assert_eq!(cli.tv.as_deref(), Some("bedroom"));

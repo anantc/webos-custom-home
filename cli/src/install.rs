@@ -346,9 +346,160 @@ pub async fn uninstall(config: &Config) -> Result<()> {
     Ok(())
 }
 
+/// Keep installed service definitions and their loaded/running state during an update.
+pub(crate) struct UpdateJobs {
+    active: Vec<String>,
+    installed: bool,
+}
+impl UpdateJobs {
+    pub async fn capture(config: &Config) -> Result<Self> {
+        let mut active = Vec::new();
+        let mut installed = false;
+        if cfg!(target_os = "macos") {
+            for job in ["watch", "renew"] {
+                let label = config.mac_label(job);
+                let path = config
+                    .home
+                    .join(format!("Library/LaunchAgents/{label}.plist"));
+                if !path.is_file() {
+                    continue;
+                }
+                installed = true;
+                let service = format!("gui/{}/{label}", unsafe { libc::getuid() });
+                if command("launchctl", &["print", &service], false)
+                    .await?
+                    .status
+                    .success()
+                {
+                    active.push(label);
+                }
+            }
+        } else if cfg!(target_os = "linux") {
+            for (job, kind) in [
+                ("watch", "service"),
+                ("renew", "timer"),
+                ("renew", "service"),
+            ] {
+                let unit = config.linux_unit(job, kind);
+                if !config
+                    .home
+                    .join(".config/systemd/user")
+                    .join(&unit)
+                    .is_file()
+                {
+                    continue;
+                }
+                installed = true;
+                if command(
+                    "systemctl",
+                    &["--user", "is-active", "--quiet", &unit],
+                    false,
+                )
+                .await?
+                .status
+                .success()
+                {
+                    active.push(unit);
+                }
+            }
+        }
+        Ok(Self { active, installed })
+    }
+    pub async fn pause(&self) -> Result<()> {
+        for name in &self.active {
+            if cfg!(target_os = "macos") {
+                stop_mac_job(&format!("gui/{}", unsafe { libc::getuid() }), name).await?;
+            } else {
+                command("systemctl", &["--user", "stop", name], true).await?;
+            }
+        }
+        Ok(())
+    }
+    pub fn refresh_binary(&self, config: &Config, bytes: &[u8]) -> Result<()> {
+        if self.installed {
+            crate::self_install::write_atomic(&config.installed_binary(), bytes, 0o700)?;
+        }
+        Ok(())
+    }
+    pub async fn resume(&self, config: &Config) -> Result<()> {
+        let mut failed = false;
+        for name in &self.active {
+            let result = if cfg!(target_os = "macos") {
+                let domain = format!("gui/{}", unsafe { libc::getuid() });
+                let service = format!("{domain}/{name}");
+                match command("launchctl", &["print", &service], false).await {
+                    Ok(output) if output.status.success() => Ok(()),
+                    Ok(_) => {
+                        let path = config
+                            .home
+                            .join(format!("Library/LaunchAgents/{name}.plist"));
+                        command(
+                            "launchctl",
+                            &["bootstrap", &domain, &path.to_string_lossy()],
+                            true,
+                        )
+                        .await
+                        .map(|_| ())
+                    }
+                    Err(error) => Err(error),
+                }
+            } else {
+                command("systemctl", &["--user", "start", name], true)
+                    .await
+                    .map(|_| ())
+            };
+            if let Err(error) = result {
+                crate::log(&format!("{}: could not restart {name}: {error}", config.tv));
+                failed = true;
+            }
+        }
+        if failed {
+            Err(fault("Background restart failed. Check the service-manager error above; run tvhome --tv NAME install to recover."))
+        } else {
+            Ok(())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn updating_without_installed_jobs_does_not_enable_or_install_them() {
+        let root = tempfile::tempdir().unwrap();
+        let mut config = crate::common::test_config(root.path());
+        config.values.insert("TV_WATCH_ENABLED".into(), "1".into());
+        config.values.insert("TV_RENEW_ENABLED".into(), "1".into());
+        let jobs = UpdateJobs::capture(&config).await.unwrap();
+        assert!(!jobs.installed);
+        assert!(jobs.active.is_empty());
+        jobs.pause().await.unwrap();
+        jobs.refresh_binary(&config, b"new executable").unwrap();
+        jobs.resume(&config).await.unwrap();
+        assert!(!config.installed_binary().exists());
+    }
+    #[test]
+    fn background_update_uses_bytes_saved_before_self_replacement() {
+        let root = tempfile::tempdir().unwrap();
+        let config = crate::common::test_config(root.path());
+        let jobs = UpdateJobs {
+            active: vec![],
+            installed: true,
+        };
+        jobs.refresh_binary(&config, b"new executable").unwrap();
+        assert_eq!(
+            fs::read(config.installed_binary()).unwrap(),
+            b"new executable"
+        );
+        assert_eq!(
+            fs::metadata(config.installed_binary())
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o700
+        );
+    }
     #[test]
     fn service_error_includes_failed_operation_and_os_detail() {
         use std::os::unix::process::ExitStatusExt;

@@ -17,7 +17,9 @@ as artwork-sources.json in packages). Artwork belongs to its respective publishe
 Inter is distributed under the SIL Open Font License; assets/Inter-OFL.txt
 is included in generated packages.
 
-The native SDL binary is from webosbrew/SDL-webOS (zlib license).
+The native SDL binary is built from webosbrew/SDL-webOS (zlib license),
+commit f599b850f9b1347cebdbb9a806999ddd170ab661, with Home's local cursor
+ownership patch (patches/sdl-compositor-cursor.patch in the source distribution).
 https://github.com/webosbrew/SDL-webOS
 FreeType and Skia third-party notices are included when packaging.
 Portions of this software are copyright © 2022 The FreeType Project

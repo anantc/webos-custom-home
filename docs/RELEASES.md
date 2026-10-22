@@ -64,3 +64,19 @@ executable and notices before installing:
 node cli/install.cjs --version X.Y.Z --dir /tmp/tvhome-release-check
 /tmp/tvhome-release-check/tvhome --version
 ```
+
+## Update compatibility
+
+`tvhome update` resolves the latest published stable `vX.Y.Z` release through the
+GitHub API. Preserve the platform executable and `.sha256` asset names. The
+updater checks the checksum and reported version, then runs the verified binary
+with the internal `update --apply` handoff while its parent holds the update
+lock. The new binary supplies its own embedded Home package and notices. Keep
+this handoff compatible across releases.
+
+The updater retains service definitions and their loaded/running state while
+replacing per-TV background executables. A release that changes service command
+arguments or scheduling needs an explicit update migration. Home state is
+backed up and included in each personalized package before installation; extend
+the state-file list in `cli/src/update.rs` and package preservation tests if
+the TV adds another persistent file.

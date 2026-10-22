@@ -63,21 +63,27 @@ fn cached(config: &Config) -> Result<Value> {
     }
     Ok(value)
 }
-pub fn list_tvs(home: &Path, as_json: bool) -> Result<()> {
+pub fn profile_names(home: &Path) -> Result<Vec<String>> {
     let root = home.join(".tvhome/tvs");
-    let mut rows = Vec::new();
+    let mut names = Vec::new();
     if root.exists() {
         for entry in fs::read_dir(root).map_err(|_| fault("Cannot list TV profiles."))? {
             let entry = entry.map_err(|_| fault("Cannot read TV profile."))?;
-            if !entry.path().join("environment.json").is_file() {
-                continue;
+            if entry.path().join("environment.json").is_file() {
+                names.push(entry.file_name().to_string_lossy().into_owned());
             }
-            let tv = entry.file_name().to_string_lossy().into_owned();
-            let config = Config::load_at(home.to_owned(), &tv, false, [])?;
-            let inventory = cached(&config).unwrap_or(Value::Null);
-            rows.push(json!({"name":tv,"host":config.host()?,
-                "apps":inventory["apps"].as_array().map(Vec::len),"checkedAt":inventory["checkedAt"]}));
         }
+    }
+    names.sort();
+    Ok(names)
+}
+pub fn list_tvs(home: &Path, as_json: bool) -> Result<()> {
+    let mut rows = Vec::new();
+    for tv in profile_names(home)? {
+        let config = Config::load_at(home.to_owned(), &tv, false, [])?;
+        let inventory = cached(&config).unwrap_or(Value::Null);
+        rows.push(json!({"name":tv,"host":config.host()?,
+            "apps":inventory["apps"].as_array().map(Vec::len),"checkedAt":inventory["checkedAt"]}));
     }
     rows.sort_by_key(|r| r["name"].as_str().unwrap().to_owned());
     if as_json {

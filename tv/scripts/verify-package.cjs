@@ -80,6 +80,7 @@ function verify(data, control, template = false) {
   assert.ok((flags & 0x200) && !(flags & 0x400), 'Expected soft-float ARM ABI');
   assert.ok(member('bin/tvhome-native').mode & 0o111, 'Native app must be executable');
   for (const lib of ['lib/libSDL3.so.0', 'lib/libfreetype.so.6']) assert.equal(read(lib).subarray(0, 4).toString(), '\x7fELF');
+  assert.ok(read('lib/libSDL3.so.0').includes(Buffer.from('TVHOME_WEBOS_COMPOSITOR_CURSOR')), 'SDL must include the Home compositor cursor patch');
   assert.ok(!data.some(e => e.name.includes('libstdc++.so')));
   assert.ok(read('licenses/SDL3-LICENSE.txt').length);
   assert.ok(read('assets/Inter-OFL.txt').length);

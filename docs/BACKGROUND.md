@@ -160,11 +160,10 @@ token must be replaced in the profile.
 
 ## Updates, stopping and foreground debugging
 
-After verifying the updated executable and running its `--install` option, run
-`tvhome --tv living-room install` for each TV with background features enabled.
-This refreshes that TV's private executable copy and restarts its saved selection
-of jobs. To update the TV app too, use
-[TV app updates](SETUP.md#updates).
+Run `tvhome update` to update the command, Home on all reachable TVs, and their
+installed background executables. The command pauses and restores each TV's
+running jobs automatically. For a single TV, use `tvhome --tv living-room update`.
+See [Updates](SETUP.md#updates) for offline TVs, settings preservation and recovery.
 
 To intentionally stop one TV's jobs, pause any of its configured Healthchecks checks and run:
 

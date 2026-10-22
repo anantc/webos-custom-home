@@ -131,6 +131,16 @@ pub async fn run(
 }
 pub fn install_app(config: &Config, bytes: &[u8]) -> Result<()> {
     let connection = TvSsh::connect(config, false)?;
+    install_package(&connection, bytes)?;
+    connection.luna(
+        "luna://com.webos.applicationManager/launch",
+        &json!({"id":APP_ID}),
+        None,
+    )?;
+    Ok(())
+}
+
+pub(crate) fn install_package(connection: &TvSsh, bytes: &[u8]) -> Result<()> {
     let id = SystemNonce::generate()?;
     let path = format!("/media/developer/temp/tvhome-{id}.ipk");
     connection.command("mkdir -p /media/developer/temp")?;
@@ -165,11 +175,6 @@ pub fn install_app(config: &Config, bytes: &[u8]) -> Result<()> {
                 "TV reported installation success but Home is missing from its app list.",
             ));
         }
-        connection.luna(
-            "luna://com.webos.applicationManager/launch",
-            &json!({"id":APP_ID}),
-            None,
-        )?;
         Ok(())
     })();
     let _ = connection.command(&format!("rm -f {}", ssh::quote(&path)));

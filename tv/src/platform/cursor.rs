@@ -1,12 +1,21 @@
-//! Keep SDL's cursor visibility aligned with LG's Magic Remote pointer.
+//! LG owns pointer visibility. The bundled SDL patch synchronizes local cursor state
+//! before keyboard repeat handling, without changing the compositor's global state.
 use sdl3::event::Event;
 
-pub fn visibility(event: &Event) -> Option<bool> {
-    // SDL-webOS maps LG's XKB cursor show/hide codes 1206/1207 to these raw keys.
-    // Their repeats and missing key-up describe visibility, not a held remote button.
-    match event {
-        Event::KeyDown { raw: 1198, .. } => Some(true),
-        Event::KeyDown { raw: 1199, .. } => Some(false),
-        _ => None,
-    }
+pub fn configure() {
+    sdl3::hint::set("TVHOME_WEBOS_COMPOSITOR_CURSOR", "1");
+}
+
+pub fn is_notification(event: &Event) -> bool {
+    // Defensive filtering also covers an older library or queued key-up events.
+    matches!(
+        event,
+        Event::KeyDown {
+            raw: 1198 | 1199,
+            ..
+        } | Event::KeyUp {
+            raw: 1198 | 1199,
+            ..
+        }
+    )
 }

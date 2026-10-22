@@ -47,13 +47,20 @@ SDL's webOS backend handles LG's screensaver permission requests. Home has no
 custom inactivity timer or activation calls.
 
 LG sends cursor visibility as raw key codes 1198 (show) and 1199 (hide).
-SDL can repeat these notifications without a key-up. Home mirrors their
-visibility into SDL's mouse state: otherwise SDL's Wayland backend requests a
-visible global pointer when mouse focus leaves Home, dismissing LG's screensaver
-during the transition. This behavior was reproduced on webOS 25; synchronizing
-the cursor allowed explicit screensaver activation, normal dismissal and pointer
-use. LG's automatic idle activation was then verified on the same TV with Home's
-custom timer and activation calls removed.
+They describe the compositor's state and may have no key-up. Home enables the
+local SDL patch in `patches/sdl-compositor-cursor.patch` before creating its
+window. The patch updates SDL's cursor state and image directly, consumes these
+notifications before keyboard auto-repeat, and prevents focus redraws from
+sending global show/hide requests back to LG. Ordinary pointer motion, clicks
+and the system cursor artwork still use SDL's normal Wayland handling.
+
+Previously, Home called `show_cursor` for each notification. That API also tells
+LG to change global pointer visibility; focus transitions and notification
+repeats could make the two disagree. Keeping LG in charge also avoids a global
+show request dismissing its screensaver or interfering with a content app.
+The host emulator uses stock SDL, so changes here need a physical TV check.
+With this patch, Magic Remote navigation, returning from a streaming app and
+LG’s automatic clock screensaver were verified on webOS 25.
 
 Startup logs record whether SDL accepted the screensaver permission change.
 This confirms SDL's state, not that LG has activated a screensaver. The emulator

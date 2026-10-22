@@ -655,6 +655,7 @@ fn main() -> Result<()> {
     // Set before window creation; leave Home owned by webOS so it remains an escape route.
     sdl3::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_BACK", "true");
     sdl3::hint::set("SDL_WEBOS_ACCESS_POLICY_KEYS_EXIT", "true");
+    cursor::configure();
     let sdl = sdl3::init().map_err(anyhow::Error::msg)?;
     let video = sdl.video().map_err(anyhow::Error::msg)?;
     video.gl_attr().set_alpha_size(8);
@@ -752,9 +753,8 @@ fn main() -> Result<()> {
     while !ui.quit {
         let frame_start = Instant::now();
         for event in events.poll_iter() {
-            if let Some(visible) = cursor::visibility(&event) {
-                // SDL otherwise re-shows the global LG pointer when mouse focus leaves Home.
-                sdl.mouse().show_cursor(visible);
+            if cursor::is_notification(&event) {
+                continue;
             }
             let previous_target = ui.focus_target();
             let previous_panel = ui.panel;

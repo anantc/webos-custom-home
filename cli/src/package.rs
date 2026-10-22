@@ -125,6 +125,25 @@ pub struct Package {
     control: Files,
 }
 impl Package {
+    pub fn version(&self) -> Result<String> {
+        let info: Value = serde_json::from_slice(member(&self.data, "appinfo.json")?)
+            .map_err(|_| fault("Invalid Home app metadata."))?;
+        info["version"]
+            .as_str()
+            .map(str::to_owned)
+            .ok_or(fault("Home package has no version."))
+    }
+
+    pub fn preserve_state(&mut self, files: &BTreeMap<String, Vec<u8>>) -> Result<()> {
+        for (name, bytes) in files {
+            if !["preferences.json", "speedtest-result.json"].contains(&name.as_str()) {
+                return Err(fault("Unsupported Home state file."));
+            }
+            self.data
+                .insert(format!("{ROOT}state/{name}"), (0o644, bytes.clone()));
+        }
+        Ok(())
+    }
     pub fn read(bytes: &[u8]) -> Result<Self> {
         if bytes.is_empty() {
             return Err(fault("This development build has no Home package. Build with bundled-home or supply --package."));
@@ -366,6 +385,44 @@ pub fn ordered(points: &[Value], policy: &Value) -> Result<Vec<Value>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "bundled-home")]
+    #[tokio::test]
+    async fn update_package_preserves_each_tvs_state_and_writable_directory() {
+        let root = tempfile::tempdir().unwrap();
+        for tv in ["office", "guestroom"] {
+            let mut config = crate::common::test_config(root.path());
+            config.tv = tv.into();
+            let mut package = Package::read(bundled()).unwrap();
+            let version = package.version().unwrap();
+            let saved = BTreeMap::from([
+                (
+                    "preferences.json".into(),
+                    json!({"pinnedInputs":["hdmi1"],"order":["hdmi1","netflix"],"city":tv})
+                        .to_string()
+                        .into_bytes(),
+                ),
+                ("speedtest-result.json".into(), b"{\"mbps\":210}".to_vec()),
+            ]);
+            package.preserve_state(&saved).unwrap();
+            assert!(package
+                .preserve_state(&BTreeMap::from([("../appinfo.json".into(), vec![])]))
+                .is_err());
+            let bytes = package
+                .prepare(&config, &[json!({"id":"netflix","title":"Netflix"})], &[])
+                .await
+                .unwrap();
+            let installed = Package::read(&bytes).unwrap();
+            assert_eq!(installed.version().unwrap(), version);
+            assert_eq!(installed.data[&format!("{ROOT}state/")].0 & 0o777, 0o777);
+            for (name, bytes) in saved {
+                assert_eq!(
+                    member(&installed.data, &format!("state/{name}")).unwrap(),
+                    bytes
+                );
+                assert_eq!(installed.data[&format!("{ROOT}state/{name}")].0, 0o644);
+            }
+        }
+    }
     #[test]
     fn catalog_uses_real_ids_and_filters_duplicates_and_developer_mode() {
         let policy = json!({"brands":[{"key":"netflix","name":"Netflix","pattern":"(?i)netflix","artwork":"brand-netflix.jpg","contain":false,"color":[1,2,3]}],"config":{"preferredApps":["netflix"],"hiddenApps":["hidden"]}});

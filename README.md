@@ -31,6 +31,9 @@ details. [Background operation](docs/BACKGROUND.md) explains monitoring, renewal
 and logs; [TV profiles](docs/CONFIGURATION.md) documents saved files and advanced
 configuration.
 
+Update the command and all saved TVs with `tvhome update`. TVs that are off are
+skipped; turn them on and rerun it to catch up. See [Updates](docs/SETUP.md#updates).
+
 ## Development
 
 [Development](docs/DEVELOPMENT.md) covers source setup, catalogs, builds, tests

@@ -1,2 +1,4 @@
 *
 !Dockerfile
+!patches/
+!patches/sdl-compositor-cursor.patch
