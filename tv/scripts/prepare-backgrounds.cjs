@@ -19,6 +19,19 @@ async function main() {
   for (const photo of selection) {
     const old = previous?.photos.find(p => p.id === photo.id);
     let bytes = old && await fs.readFile(path.join(out, old.file)).catch(() => null);
+    if (old && (!bytes || digest(bytes) !== old.sha256)) {
+      // Metadata-only publications reuse the reviewed JPEG, even if Unsplash's
+      // image processing has since changed. New photos fall back to their source.
+      try {
+        const response = await fetch(old.url, { signal: AbortSignal.timeout(45000) });
+        if (!response.ok) throw Error(`HTTP ${response.status}`);
+        const hosted = Buffer.from(await response.arrayBuffer());
+        if (digest(hosted) !== old.sha256) throw Error('hosted checksum mismatch');
+        bytes = hosted;
+      } catch (error) {
+        console.warn(`${photo.id}: hosted copy unavailable (${error.message}); checking Unsplash source`);
+      }
+    }
     if (!bytes || digest(bytes) !== old.sha256) {
       const url = new URL(photo.image);
       url.search = new URLSearchParams({ fm: 'jpg', fit: 'crop', crop: 'center', w: '1920', h: '1080', q: '85' });

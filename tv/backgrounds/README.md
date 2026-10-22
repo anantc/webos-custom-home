@@ -95,8 +95,9 @@ node tv/scripts/prepare-backgrounds.cjs
 ```
 
 The script prepares individual JPEGs, credits, checksums and a manifest in the
-ignored `tv/dist/backgrounds-v1/` directory. It verifies existing cached files and
-refuses silently changed source images. To deliberately change the selection or
+ignored `tv/dist/backgrounds-v1/` directory. It reuses verified cached or published
+JPEGs before requesting the Unsplash source, and refuses silently changed source
+images. Use a new photo ID for a replacement image. To deliberately change the selection or
 calendar, review the sources and run `--update`; this writes a new manifest
 revision to `tv/backgrounds/manifest.json`. Review that diff with the new images.
 
