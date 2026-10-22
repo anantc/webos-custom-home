@@ -43,10 +43,9 @@ does not change the background schedule.
 The TV keeps the displayed photo and one ready for the next transition. After
 switching, it downloads a replacement before discarding the old photo. The last photo
 stays visible if a download fails and returns after restarting Home even without
-an internet connection. If LG prevents saving in the app folder after an update,
-Home uses a temporary cache that clears when the TV fully reboots. A first launch
-without a downloaded photo has a black background. The photo's Unsplash caption
-and photographer credit appear at the bottom of the screen.
+an internet connection. Photos are saved in Home's app folder. On a fresh install,
+the background stays black until the first photo finishes downloading. The photo's
+Unsplash caption and photographer credit appear at the bottom of the screen.
 
 Home downloads the photo lineup separately, so new photos, captions and holiday
 dates can arrive without reinstalling the app. It checks on startup and roughly

@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 device="${1:-}"
 node -e 'require("./scripts/tv-profile.cjs").name(process.argv[1])' "$device"
-package="dist/$device/com.anant.tvhome.native_0.1.6_arm.ipk"
+package="dist/$device/com.anant.tvhome.native_0.1.7_arm.ipk"
 if [ ! -f "$package" ]; then
   echo "Package missing. Run ./dev.sh package $device first."
   exit 1

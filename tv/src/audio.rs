@@ -1,4 +1,5 @@
 use sdl3::audio::{AudioDevice, AudioFormat, AudioSpec, AudioStreamOwner};
+use sdl3::event::{Event, WindowEvent};
 use std::f32::consts::TAU;
 use std::time::{Duration, Instant};
 
@@ -82,31 +83,65 @@ pub struct NavigationSound {
     playback: Option<Playback>,
     samples: Vec<f32>,
     gate: ClickGate,
+    enabled: bool,
+    unavailable: bool,
 }
 
 impl NavigationSound {
-    pub fn new(sdl: &sdl3::Sdl) -> Self {
-        let playback = match Playback::open(sdl) {
-            Ok(playback) => Some(playback),
-            Err(error) => {
-                tracing::warn!(%error, "navigation audio unavailable; continuing silently");
-                None
-            }
-        };
+    pub fn new() -> Self {
         Self {
-            playback,
+            playback: None,
             samples: click_samples(),
             gate: ClickGate::default(),
+            enabled: true,
+            unavailable: false,
         }
     }
 
-    pub fn play(&mut self) {
-        let Some(playback) = &self.playback else {
-            return;
-        };
-        if !self.gate.accept(Instant::now()) {
+    pub fn handle_event(&mut self, event: &Event) {
+        match event {
+            Event::Window {
+                win_event: WindowEvent::FocusGained,
+                ..
+            } => self.resume(),
+            Event::Window {
+                win_event: WindowEvent::FocusLost | WindowEvent::Hidden | WindowEvent::Minimized,
+                ..
+            }
+            | Event::AppWillEnterBackground { .. }
+            | Event::AppDidEnterBackground { .. }
+            | Event::Quit { .. } => self.suspend(),
+            _ => (),
+        }
+    }
+
+    pub fn resume(&mut self) {
+        self.enabled = true;
+        self.unavailable = false;
+    }
+
+    pub fn play(&mut self, sdl: &sdl3::Sdl) {
+        if !self.enabled || self.unavailable || !self.gate.accept(Instant::now()) {
             return;
         }
+        if self.playback.is_none() {
+            let started = Instant::now();
+            match Playback::open(sdl) {
+                Ok(playback) => {
+                    self.playback = Some(playback);
+                    tracing::info!(
+                        elapsed_ms = started.elapsed().as_millis(),
+                        "navigation audio opened"
+                    );
+                }
+                Err(error) => {
+                    self.unavailable = true;
+                    tracing::warn!(%error, "navigation audio unavailable; continuing silently");
+                    return;
+                }
+            }
+        }
+        let playback = self.playback.as_ref().unwrap();
         // Keep only the newest click if the output device falls behind. SDL plays it
         // asynchronously; input never waits for playback, decoding or a subprocess.
         let result = playback
@@ -118,20 +153,22 @@ impl NavigationSound {
         if let Err(error) = result {
             tracing::warn!(%error, "navigation audio stopped; continuing silently");
             self.playback = None;
+            self.unavailable = true;
         }
     }
 
     pub fn suspend(&mut self) {
+        self.enabled = false;
         self.gate = ClickGate::default();
-        if let Some(playback) = &self.playback {
-            let result = playback
-                .stream
-                .pause()
-                .and_then(|_| playback.stream.clear());
-            if let Err(error) = result {
-                tracing::warn!(%error, "navigation audio stopped; continuing silently");
-                self.playback = None;
-            }
+        // A paused SDL device still feeds silence to the output. Close the stream
+        // and device so another app can acquire the TV's audio resources.
+        if let Some(playback) = self.playback.take() {
+            let started = Instant::now();
+            drop(playback);
+            tracing::info!(
+                elapsed_ms = started.elapsed().as_millis(),
+                "navigation audio released"
+            );
         }
     }
 }
@@ -161,37 +198,56 @@ mod tests {
     }
 
     #[test]
-    fn playback_resumes_and_discards_pending_audio_on_suspend() {
+    fn playback_closes_on_handoff_and_reopens_only_after_focus_returns() {
         // The preview container has no speaker. Exercise SDL's real stream lifecycle.
         sdl3::hint::set("SDL_AUDIO_DRIVER", "dummy");
         let sdl = sdl3::init().unwrap();
-        let mut sound = NavigationSound::new(&sdl);
-        assert!(sound
-            .playback
-            .as_ref()
-            .unwrap()
-            .stream
-            .device_paused()
-            .unwrap());
-        sound.play();
-        assert!(!sound
-            .playback
-            .as_ref()
-            .unwrap()
-            .stream
-            .device_paused()
-            .unwrap());
-        sound.suspend();
-        let stream = &sound.playback.as_ref().unwrap().stream;
-        assert!(stream.device_paused().unwrap());
-        assert_eq!(stream.queued_bytes().unwrap(), 0);
-        sound.play();
-        assert!(!sound
-            .playback
-            .as_ref()
-            .unwrap()
-            .stream
-            .device_paused()
-            .unwrap());
+        // Keep the subsystem alive so invalid IDs prove device closure, rather
+        // than merely observing SDL's final subsystem cleanup.
+        let _audio = sdl.audio().unwrap();
+        let mut sound = NavigationSound::new();
+        assert!(sound.playback.is_none());
+        for event in [
+            None, // Explicit release before dispatching an app launch.
+            Some(window_event(WindowEvent::FocusLost)),
+            Some(window_event(WindowEvent::Hidden)),
+            Some(window_event(WindowEvent::Minimized)),
+            Some(Event::AppWillEnterBackground { timestamp: 0 }),
+            Some(Event::AppDidEnterBackground { timestamp: 0 }),
+            Some(Event::Quit { timestamp: 0 }),
+        ] {
+            sound.play(&sdl);
+            let playback = sound.playback.as_ref().unwrap();
+            let device_id = playback._device.id();
+            assert!(!playback.stream.device_paused().unwrap());
+            assert!(device_id.name().is_ok());
+            if let Some(event) = event {
+                sound.handle_event(&event);
+            } else {
+                sound.suspend();
+            }
+            assert!(sound.playback.is_none());
+            assert!(device_id.name().is_err(), "the old device must be closed");
+
+            // Late input and redraw/show events must not reacquire audio while
+            // another app is taking over.
+            for event in [WindowEvent::Exposed, WindowEvent::Shown] {
+                sound.handle_event(&window_event(event));
+                sound.play(&sdl);
+                assert!(sound.playback.is_none());
+            }
+            sound.handle_event(&window_event(WindowEvent::FocusGained));
+            assert!(sound.playback.is_none(), "focus alone does not open audio");
+        }
+        sound.play(&sdl);
+        assert!(sound.playback.is_some());
+    }
+
+    fn window_event(win_event: WindowEvent) -> Event {
+        Event::Window {
+            timestamp: 0,
+            window_id: 1,
+            win_event,
+        }
     }
 }

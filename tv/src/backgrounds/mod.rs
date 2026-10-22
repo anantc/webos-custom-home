@@ -98,9 +98,7 @@ impl Monitor {
         let (results, rx) = mpsc::channel();
         std::thread::spawn(move || {
             let run = || -> anyhow::Result<()> {
-                let fallback = (!preview)
-                    .then(|| std::env::temp_dir().join("com.anant.tvhome.native-backgrounds"));
-                let mut store = Store::open(root, preview_base, fallback)?;
+                let mut store = Store::new(root, preview_base)?;
                 let runtime = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()?;

@@ -163,33 +163,6 @@ fn trusted_redirect(url: &reqwest::Url) -> bool {
         )
 }
 impl Store {
-    pub fn open(
-        root: PathBuf,
-        preview_base: Option<String>,
-        fallback: Option<PathBuf>,
-    ) -> Result<Self> {
-        match Self::new(root, preview_base.clone()) {
-            Ok(store) => Ok(store),
-            Err(error) => {
-                let denied = error.chain().any(|cause| {
-                    cause.downcast_ref::<std::io::Error>().is_some_and(|e| {
-                        matches!(
-                            e.kind(),
-                            std::io::ErrorKind::PermissionDenied
-                                | std::io::ErrorKind::ReadOnlyFilesystem
-                        )
-                    })
-                });
-                if denied {
-                    if let Some(path) = fallback {
-                        tracing::warn!(%error, path = %path.display(), "App storage is unwritable; photos use a temporary cache cleared on reboot");
-                        return Self::new(path, preview_base);
-                    }
-                }
-                Err(error)
-            }
-        }
-    }
     pub fn new(root: PathBuf, preview_base: Option<String>) -> Result<Self> {
         if let Some(base) = &preview_base {
             let url = reqwest::Url::parse(base)?;
@@ -201,7 +174,8 @@ impl Store {
                 "Preview origin must be loopback HTTP"
             );
         }
-        std::fs::create_dir_all(&root)?;
+        std::fs::create_dir_all(&root)
+            .with_context(|| format!("Could not create photo cache at {}", root.display()))?;
         // An existing directory can become unwritable after an LG app update.
         let nonce = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)?
@@ -210,7 +184,8 @@ impl Store {
         let file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
-            .open(&probe)?;
+            .open(&probe)
+            .with_context(|| format!("Photo cache is not writable at {}", root.display()))?;
         drop(file);
         std::fs::remove_file(probe)?;
         let seed = Manifest::seed();
@@ -358,7 +333,7 @@ impl Store {
     }
     fn retain_pair(&self, ready: &str) {
         // Only called after verification and successful storage. A failed fetch
-        // leaves both existing photos intact, including the previous fallback.
+        // leaves both existing photos intact.
         let prune = || -> Result<()> {
             for entry in std::fs::read_dir(&self.root)? {
                 let entry = entry?;

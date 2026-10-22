@@ -72,9 +72,16 @@ Navigation audio is a generated 40 ms click, cached once and played asynchronous
 through SDL. Focus changes have a 60 ms minimum interval. Repeated input at a
 grid edge or pointer movement within one target stays silent.
 
-Launching an app or losing focus pauses and clears audio. Audio failures fall
-back to silent navigation. Test volume and latency on the TV; VNC preview does
-not carry audio.
+Audio opens on the first navigation click. Launching an app, losing focus or
+entering the background closes the stream and device, releasing the TV's audio
+resources. Home regaining focus permits the next click to reopen audio; repaint
+events do not. Audio failures fall back to silent navigation. Logs include device
+open/release timings.
+
+The lifecycle test checks that old SDL device handles become invalid after each
+handoff. Test volume, return-to-Home latency and continued playback in Sony LIV
+and other apps on the TV; the emulator cannot verify LG's audio routing and VNC
+does not carry audio.
 
 ## Assets
 

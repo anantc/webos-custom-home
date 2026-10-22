@@ -692,7 +692,7 @@ fn main() -> Result<()> {
     }
     let mut graphics = gl::ConsoleGl::new(&window, &video)?;
     graphics.set_swap_interval(&video, true);
-    let mut sounds = audio::NavigationSound::new(&sdl);
+    let mut sounds = audio::NavigationSound::new();
     let mut events = sdl.event_pump().map_err(anyhow::Error::msg)?;
     let mut ui = Ui::new(catalog.apps.len());
     let mut dirty = true;
@@ -771,6 +771,7 @@ fn main() -> Result<()> {
     while !ui.quit {
         let frame_start = Instant::now();
         for event in events.poll_iter() {
+            sounds.handle_event(&event);
             if cursor::is_notification(&event) {
                 continue;
             }
@@ -802,7 +803,6 @@ fn main() -> Result<()> {
                         focused = false;
                         ui.cancel_move();
                         speed_test.cancel();
-                        sounds.suspend();
                     }
                     _ => (),
                 },
@@ -948,7 +948,7 @@ fn main() -> Result<()> {
                 && current_target.is_some()
                 && current_target != previous_target
             {
-                sounds.play();
+                sounds.play(&sdl);
             }
             if ui.panel == Some(Panel::Wifi) && previous_panel != ui.panel {
                 wifi_monitor.refresh(Instant::now());
@@ -985,6 +985,7 @@ fn main() -> Result<()> {
                 if let Err(std::sync::mpsc::TrySendError::Disconnected(_)) =
                     launcher.requests.try_send(request)
                 {
+                    sounds.resume();
                     ui.toast = Some((
                         "App launcher unavailable. Reopen Home.".into(),
                         Instant::now(),
@@ -1075,6 +1076,9 @@ fn main() -> Result<()> {
             }
         }
         for response in launcher.results.try_iter() {
+            if focused && (preview || response.is_err()) {
+                sounds.resume();
+            }
             if let Err(error) = response {
                 tracing::warn!(error = %error, "launch failed");
                 ui.toast = Some((error, Instant::now()));

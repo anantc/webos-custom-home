@@ -30,17 +30,20 @@ impl Drop for Temp {
 
 #[test]
 #[cfg(target_os = "linux")]
-fn read_only_storage_falls_back_and_restores_the_cached_manifest() {
-    let temporary = Temp::new();
+fn read_only_storage_reports_the_cache_path() {
     // sysfs is read-only even for root in the build/preview container.
-    let mut store = Store::open(
-        PathBuf::from("/sys/kernel"),
-        None,
-        Some(temporary.0.join("fallback")),
-    )
-    .unwrap();
-    assert_eq!(store.root, temporary.0.join("fallback"));
-    assert!(Store::open(PathBuf::from("/sys/kernel"), None, None).is_err());
+    let error = Store::new(PathBuf::from("/sys/kernel"), None)
+        .err()
+        .expect("read-only storage must fail");
+    assert!(error.to_string().contains("/sys/kernel"));
+}
+
+#[test]
+fn cache_reopens_at_the_same_path_and_restores_the_manifest() {
+    let temporary = Temp::new();
+    let root = temporary.0.join("state/backgrounds");
+    let mut store = Store::new(root.clone(), None).unwrap();
+    assert_eq!(store.root, root);
     let manifest = store.manifest.clone();
     store.manifest.photos[0].title = "Cached manifest".into();
     std::fs::write(
@@ -48,27 +51,22 @@ fn read_only_storage_falls_back_and_restores_the_cached_manifest() {
         serde_json::to_vec(&store.manifest).unwrap(),
     )
     .unwrap();
-    let reopened = Store::open(PathBuf::from("/sys/kernel"), None, Some(store.root)).unwrap();
+    let reopened = Store::new(root.clone(), None).unwrap();
+    assert_eq!(reopened.root, root);
     assert_eq!(reopened.manifest.photos[0].title, "Cached manifest");
     assert_eq!(reopened.manifest.photos.len(), manifest.photos.len());
 }
 
 #[test]
-fn writable_app_cache_is_preferred_and_invalid_paths_do_not_silently_fall_back() {
+fn invalid_cache_path_reports_an_error_without_changing_it() {
     let temp = Temp::new();
-    let app = temp.0.join("app");
-    let fallback = temp.0.join("fallback");
-    assert_eq!(
-        Store::open(app.clone(), None, Some(fallback.clone()))
-            .unwrap()
-            .root,
-        app
-    );
-    assert!(!fallback.exists());
     let invalid = temp.0.join("file");
     std::fs::write(&invalid, b"not a directory").unwrap();
-    assert!(Store::open(invalid, None, Some(fallback.clone())).is_err());
-    assert!(!fallback.exists());
+    let error = Store::new(invalid.clone(), None)
+        .err()
+        .expect("a regular file cannot be a cache directory");
+    assert!(error.to_string().contains(&invalid.display().to_string()));
+    assert_eq!(std::fs::read(invalid).unwrap(), b"not a directory");
 }
 struct Server {
     base: String,
@@ -230,12 +228,16 @@ fn rotation_counts_foreground_time_and_pauses_in_background() {
 #[test]
 fn downloads_verified_photo_and_restores_offline_without_network() {
     let temp = Temp::new();
+    let root = temp.0.join("state/backgrounds");
+    assert!(!root.exists());
     let (photo, bytes) = fixture();
-    let server = Server::new(200, bytes);
-    let mut store = Store::new(temp.0.clone(), Some(server.base.clone())).unwrap();
+    let server = Server::new(200, bytes.clone());
+    let mut store = Store::new(root.clone(), Some(server.base.clone())).unwrap();
+    assert!(store.restore().is_none());
     store.manifest.photos[0] = photo.clone();
     let loaded = runtime().block_on(store.load(&photo)).unwrap();
     store.displayed(&loaded.photo).unwrap();
+    assert_eq!(std::fs::read(root.join(&photo.file)).unwrap(), bytes);
     assert_eq!(server.requests.load(Ordering::Relaxed), 1);
     drop(server);
     assert_eq!(store.restore().unwrap().photo.id, photo.id);

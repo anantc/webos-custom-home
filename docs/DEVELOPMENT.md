@@ -75,7 +75,7 @@ On a test TV, follow [TV setup](SETUP.md) using this executable. For a locally
 built template override:
 
 ```sh
-./cli/target/release/tvhome --tv living-room setup --package tv/dist/template/com.anant.tvhome.native_0.1.6_arm.ipk
+./cli/target/release/tvhome --tv living-room setup --package tv/dist/template/com.anant.tvhome.native_0.1.7_arm.ipk
 ```
 
 Stop that TV's jobs before rerunning setup. The override affects that installation;
