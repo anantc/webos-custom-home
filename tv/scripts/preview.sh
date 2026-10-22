@@ -11,4 +11,9 @@ done
 x11vnc -display :99 -forever -shared -nopw -localhost -rfbport 5900 >/tmp/tvhome-vnc.log 2>&1 &
 node scripts/preview-server.cjs >/tmp/tvhome-preview-server.log 2>&1 &
 echo "Preview: http://127.0.0.1:6081/vnc.html?autoconnect=1&resize=scale"
+if [ "${TVHOME_PREVIEW_BACKGROUNDS:-}" = local ]; then
+  [ -f dist/backgrounds-v1/manifest.json ] || { echo "Prepare photos with node tv/scripts/prepare-backgrounds.cjs first."; exit 1; }
+  node scripts/background-server.cjs >/tmp/tvhome-photo-server.log 2>&1 &
+  export TVHOME_PREVIEW_BACKGROUND_BASE=http://127.0.0.1:8793/
+fi
 target/release/tvhome-native --preview --assets assets

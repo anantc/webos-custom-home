@@ -1,4 +1,5 @@
 mod audio;
+mod backgrounds;
 mod catalog;
 mod city;
 mod gl;
@@ -640,6 +641,14 @@ fn main() -> Result<()> {
         "speedtest-result.json"
     });
     let mut speed_test = speedtest::Monitor::new(result_path, preview);
+    let mut backgrounds = backgrounds::Monitor::new(
+        preferences_path.with_file_name(if preview {
+            "preview-backgrounds"
+        } else {
+            "backgrounds"
+        }),
+        preview,
+    );
     let preference_writer = preferences::writer(preferences_path);
     let mut preference_pending = false;
     let mut catalog = prefs.catalog(&source_catalog);
@@ -713,6 +722,7 @@ fn main() -> Result<()> {
         renderer.draw(
             canvas,
             &render::Frame {
+                background: backgrounds.view(),
                 catalog: &catalog,
                 selected: 0,
                 status: false,
@@ -1047,6 +1057,7 @@ fn main() -> Result<()> {
         let now = Instant::now();
         dirty |= wifi_monitor.expire(now);
         dirty |= weather_monitor.tick(focused);
+        dirty |= backgrounds.tick(now, focused);
         if wifi_monitor.due(now, focused) {
             match wifi_worker.requests.try_send(()) {
                 Ok(()) => wifi_monitor.start(),
@@ -1088,7 +1099,8 @@ fn main() -> Result<()> {
                 dirty = true;
             }
         }
-        let animating = ui.moving.is_some()
+        let animating = backgrounds.animating()
+            || ui.moving.is_some()
             || ui.scroll.active()
             || ui.scales.iter().any(Tween::active)
             || ui.positions.iter().any(TileMotion::active);
@@ -1111,6 +1123,7 @@ fn main() -> Result<()> {
             renderer.draw(
                 graphics.surface(size.0, size.1)?.canvas(),
                 &render::Frame {
+                    background: backgrounds.view(),
                     catalog: &catalog,
                     selected: ui.selected,
                     status: ui.header == Some(Header::Controls),

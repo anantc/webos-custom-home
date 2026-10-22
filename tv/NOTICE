@@ -28,3 +28,8 @@ See vendor/third-party and the generated licenses/ directory for notices.
 
 Weather and HDMI symbols are derived from Lucide 1.8.0 (ISC; inherited Feather
 symbols under MIT). https://lucide.dev — see vendor/lucide/LICENSE.
+
+Scenic photographs are downloaded separately under the Unsplash License.
+Photographers and source pages are recorded in backgrounds/manifest.json in the
+source distribution; the active photographer is credited on screen.
+https://unsplash.com/license

@@ -26,6 +26,7 @@ build can select a newer SDK.
 | Path | Responsibility |
 | --- | --- |
 | `tv/src/main.rs`, `model.rs` | Input, focus, layout, panels and scheduling |
+| `tv/src/backgrounds/`, `tv/backgrounds/` | Seasonal calendar, photo downloads, cache and reviewed photo manifest |
 | `tv/src/catalog.rs` | Validated catalog reloads and background icon decoding |
 | `tv/src/render.rs`, `audio.rs`, `gl.rs` | Drawing, sound and GPU context |
 | `tv/src/platform/` | webOS services and compatibility layer |
@@ -146,6 +147,9 @@ pointer input work through VNC. Stop with Ctrl+C.
 VNC does not carry navigation sound. Software-rendered preview timings do not
 represent TV GPU performance. [TV app internals](../tv/README.md) describes
 instrumentation and Wi-Fi fixtures.
+
+Scenic photo preparation, calendar maintenance, release assets and preview controls
+are in [Scenic backgrounds](../tv/backgrounds/README.md).
 
 ## Validation
 

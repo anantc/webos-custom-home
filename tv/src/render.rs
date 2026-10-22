@@ -9,6 +9,7 @@ use std::sync::mpsc;
 mod weather;
 
 pub struct Frame<'a> {
+    pub background: crate::backgrounds::View<'a>,
     pub catalog: &'a Catalog,
     pub selected: usize,
     pub status: bool,
@@ -41,6 +42,7 @@ pub struct Renderer {
     font: Font,
     pub icons: Vec<Option<Image>>,
     glow: Image,
+    background_shade: Paint,
     symbols: crate::symbols::Symbols,
 }
 
@@ -49,7 +51,7 @@ fn paint(color: Color) -> Paint {
     p.set_color(color).set_anti_alias(true);
     p
 }
-fn rgba_image(bytes: &[u8], w: u32, h: u32) -> Result<Image> {
+pub(crate) fn rgba_image(bytes: &[u8], w: u32, h: u32) -> Result<Image> {
     let info = ImageInfo::new(
         (w as i32, h as i32),
         ColorType::RGBA8888,
@@ -132,7 +134,25 @@ impl Renderer {
                 pixels[offset..offset + 4].copy_from_slice(&[255, 255, 255, a]);
             }
         }
+        let colors =
+            [195, 155, 20, 90, 225].map(|a| skia_safe::Color4f::from(Color::from_argb(a, 0, 0, 0)));
+        let gradient = skia_safe::gradient::Gradient::new(
+            skia_safe::gradient::Colors::new(
+                &colors,
+                Some(&[0.0, 0.28, 0.48, 0.7, 1.0]),
+                skia_safe::TileMode::Clamp,
+                None,
+            ),
+            skia_safe::gradient::Interpolation::default(),
+        );
+        let mut background_shade = Paint::default();
+        background_shade.set_shader(skia_safe::gradient::shaders::linear_gradient(
+            ((0.0, 0.0), (0.0, 1080.0)),
+            &gradient,
+            None,
+        ));
         Ok(Self {
+            background_shade,
             font,
             icons: vec![None; count],
             glow: rgba_image(&pixels, 256, 96)?,
@@ -162,10 +182,40 @@ impl Renderer {
         canvas.draw_str(text, (x - width, y), &font, &paint(color));
     }
 
+    fn background(&self, canvas: &Canvas, view: &crate::backgrounds::View<'_>) {
+        let bounds = Rect::from_xywh(0.0, 0.0, 1920.0, 1080.0);
+        if let Some(previous) = view.previous {
+            canvas.draw_image_rect(&previous.image, None, bounds, &paint(Color::WHITE));
+        }
+        if let Some(current) = view.current {
+            let mut p = paint(Color::WHITE);
+            p.set_alpha_f(view.blend);
+            canvas.draw_image_rect(&current.image, None, bounds, &p);
+        }
+        // Also drawn during startup prewarming, before a photo arrives.
+        canvas.draw_rect(bounds, &self.background_shade);
+        if let Some(current) = view.current {
+            let credit = format!("Photo by {} · Unsplash", current.photo.author);
+            let mut font = self.font.clone();
+            font.set_size(16.0);
+            let width = font.measure_str(&credit, None).0;
+            self.text(
+                canvas,
+                &credit,
+                1920.0 - LEFT - width,
+                1053.0,
+                16.0,
+                Color::from_argb(180, 255, 255, 255),
+                false,
+            );
+        }
+    }
+
     pub fn draw(&self, canvas: &Canvas, f: &Frame<'_>, size: (u32, u32)) {
         canvas.clear(Color::BLACK);
         canvas.save();
         canvas.scale((size.0 as f32 / 1920.0, size.1 as f32 / 1080.0));
+        self.background(canvas, &f.background);
         let top = grid_top(f.catalog.apps.len()) - f.scroll;
         let [r, g, b] = f.catalog.apps[f.selected].color;
         let mut p = paint(Color::WHITE);

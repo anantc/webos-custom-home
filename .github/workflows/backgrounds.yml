@@ -1,0 +1,61 @@
+name: Publish background photos
+
+on:
+  push:
+    tags: ['backgrounds-v1']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: background-photos
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare and verify the reviewed photos
+        run: |
+          node tv/scripts/prepare-backgrounds.cjs
+          cmp tv/backgrounds/manifest.json tv/dist/backgrounds-v1/manifest.json
+          cd tv/dist/backgrounds-v1
+          sha256sum --check SHA256SUMS
+      - name: Publish photo assets separately from application releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view backgrounds-v1 >/dev/null 2>&1; then
+            gh release create backgrounds-v1 --verify-tag --draft --latest=false \
+              --title 'Home scenic backgrounds' \
+              --notes 'Reviewed seasonal and holiday photos downloaded by Home. Photographer credits, original Unsplash pages and license links are in CREDITS.txt and manifest.json. SHA256SUMS verifies the JPEGs. These assets are separate from the application download.'
+          fi
+          gh api "repos/$GH_REPO/releases/tags/backgrounds-v1" > /tmp/background-release.json
+          node - <<'JS'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const {execFileSync} = require('node:child_process');
+          const release = JSON.parse(fs.readFileSync('/tmp/background-release.json'));
+          const directory = 'tv/dist/backgrounds-v1';
+          for (const name of fs.readdirSync(directory)) {
+            const file = `${directory}/${name}`;
+            const existing = release.assets.find(a => a.name === name);
+            const sha = 'sha256:' + crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+            if (existing) {
+              if (existing.digest !== sha) throw Error(`Existing asset differs: ${name}; review before replacing it.`);
+              continue;
+            }
+            execFileSync('gh', ['release', 'upload', 'backgrounds-v1', file], {stdio: 'inherit'});
+          }
+          JS
+          gh release edit backgrounds-v1 --draft=false --latest=false

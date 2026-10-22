@@ -33,6 +33,18 @@ new apps and newly pinned inputs appear at the end. Temporarily unavailable
 tiles return to their saved positions when available again. Leaving Home during
 an unfinished move cancels it. Removing Home also removes its saved layout.
 
+## Scenic backgrounds
+
+Home rotates through seasonal photographs every ten minutes while it is visible.
+Diwali, Holi, Halloween, Christmas and Thanksgiving collections appear around
+those holidays. Seasons follow the Indian calendar; changing the weather city
+does not change the background schedule.
+
+The TV downloads photos as needed and keeps a small local cache. The last photo
+stays visible if a download fails and returns after a restart even without an
+internet connection. A first launch without a downloaded photo has a black
+background. The photographer is credited at the bottom of the screen.
+
 ## Screensaver
 
 LG controls the screensaver's timing and activation. Home allows LG's screensaver
